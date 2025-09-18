@@ -1,0 +1,257 @@
+export enum TerrainType {
+  Plains,
+  Forest,
+  Hills,
+  Mountains,
+  Desert,
+  Lake,
+  Swamp,
+  Steppe,
+  Volcanic,
+  Sea,
+}
+
+export interface TerrainDefinition {
+  name: string;
+  color: string;
+  movementCost: number;
+  defenseBonus: number;
+  maxFood: number;
+  foodRegrowth: number;
+  maxWood: number;
+  woodRegrowth: number;
+  maxStone: number; // Depletable
+  maxHides: number;
+  hidesRegrowth: number;
+  maxObsidian: number; // Depletable
+  diseaseRisk: 'Low' | 'Medium' | 'High';
+  requiredTech?: string;
+}
+
+export enum UnitType {
+    Infantry = 'Infantry',
+    Tank = 'Tank',
+    Tribesman = 'Tribesman',
+    Tribeswoman = 'Tribeswoman',
+    Child = 'Child',
+    Shaman = 'Shaman',
+}
+
+export enum UnitSize {
+    Small,
+    Large,
+}
+
+export enum Gender {
+    Male,
+    Female,
+    None,
+}
+
+export interface UnitDefinition {
+    movement: number;
+    cost: number; // Gold cost
+    productionCost: number;
+    attack: number;
+    defense: number;
+    maxHp: number;
+    size: UnitSize;
+    foodGatherRate: number;
+    foodConsumption: number;
+    productionYield: number;
+    carryCapacity: number;
+    researchYield?: number;
+    healingBonus?: number;
+    requiredTech?: string;
+    gender?: Gender;
+}
+
+export enum BuildingType {
+    Marketplace = 'Marketplace',
+    Granary = 'Granary',
+}
+
+export enum CampBuildingType {
+    Palisade = 'Palisade',
+    ScoutTent = 'Scout Tent',
+    ForagingPost = 'Foraging Post',
+}
+
+export interface BuildingDefinition {
+    name: string;
+    description: string;
+    cost: number; // Gold cost
+    productionCost: number;
+    goldBonus?: number;
+    foodBonus?: number;
+    foodStorageBonus?: number;
+    requiredTech?: string;
+}
+
+export interface CampBuildingDefinition {
+    name: string;
+    description: string;
+    cost: number;
+    productionCost: number;
+    defenseBonus?: number;
+    visionBonus?: number;
+    foodGatherBonus?: number;
+    requiredTech?: string;
+}
+
+export interface BuildQueueItem {
+    id: string;
+    type: 'unit' | 'building';
+    itemType: UnitType | BuildingType | CampBuildingType;
+    productionCost: number;
+    progress: number;
+}
+
+export interface AxialCoords {
+  q: number;
+  r: number;
+}
+
+export interface Hex extends AxialCoords {
+  terrain: TerrainType;
+  armyId?: string;
+  cityId?: string;
+  currentFood: number;
+  currentWood: number;
+  currentStone: number;
+  currentHides: number;
+  currentObsidian: number;
+  wasStarving?: boolean;
+}
+
+export interface Unit {
+  id: string;
+  type: UnitType;
+  ownerId: number;
+  hp: number;
+  foodStored: number;
+  age?: number;
+  gender: Gender;
+}
+
+export interface Army {
+  id: string;
+  ownerId: number;
+  position: AxialCoords;
+  unitIds: string[];
+  movementPoints: number;
+  maxMovementPoints: number;
+  name?: string;
+  foundingTurn: number;
+  isCamped?: boolean;
+  controlledTiles?: string[];
+  // New properties for when isCamped is true
+  level?: number;
+  population?: number;
+  buildings?: CampBuildingType[];
+  buildQueue?: BuildQueueItem[];
+  nextPopulationMilestone?: number;
+}
+
+export interface City {
+  id:string;
+  ownerId: number;
+  position: AxialCoords;
+  name: string;
+  hp: number;
+  maxHp: number;
+  population: number; // This is now just the count of units in garrison
+  food: number;
+  foodStorageCapacity: number;
+  level: number;
+  buildings: BuildingType[];
+  buildQueue: BuildQueueItem[];
+  garrison: string[];
+  controlledTiles: string[];
+  pendingInfluenceExpansions: number;
+  nextPopulationMilestone: number;
+}
+
+export interface PlayerCulture {
+    nomadism: number; // -100 (Settled) to 100 (Nomadic)
+    genderRoles: number; // -100 (Patriarchal) to 100 (Matriarchal)
+    militarism: number; // -100 (Defensive) to 100 (Aggressive)
+    unlockedAspects: string[];
+}
+
+export interface Player {
+  id: number;
+  name: string;
+  color: string;
+  gold: number;
+  wood: number;
+  stone: number;
+  hides: number;
+  obsidian: number;
+  researchPoints: number; // Unassigned research points
+  unlockedTechs: string[];
+  currentResearchId: string | null; // The ID of the tech currently being researched
+  researchProgress: number; // How many points have been invested in the current research
+  culture: PlayerCulture;
+  actionsThisTurn: {
+      attacks: number;
+  };
+}
+
+export interface GameState {
+  hexes: Map<string, Hex>;
+  units: Map<string, Unit>;
+  cities: Map<string, City>;
+  armies: Map<string, Army>;
+  players: Player[];
+  currentPlayerId: number;
+  turn: number;
+}
+
+export interface ArmyDeploymentInfo {
+    sourceId: string;
+    sourceType: 'city' | 'army';
+    unitsToMove: { unitType: UnitType; count: number }[];
+}
+
+
+// Tech Tree Types
+export enum TechEffectType {
+    UnlockUnit,
+    UnlockBuilding,
+    GlobalBonus,
+}
+
+export interface TechEffect {
+    type: TechEffectType;
+    payload: any; // e.g., UnitType, BuildingType, or bonus details { bonus: 'gold_from_hills', value: 1 }
+}
+
+export interface Technology {
+    id: string;
+    name: string;
+    description: string;
+    cost: number;
+    prerequisites: string[];
+    effects: TechEffect[];
+    tier: number;
+}
+
+// Culture Types
+export enum CultureAxis {
+    Nomadism = 'nomadism',
+    GenderRoles = 'genderRoles',
+    Militarism = 'militarism',
+}
+
+export interface CulturalAspectUnlockCondition {
+    axis: CultureAxis;
+    threshold: number; // e.g., > 50 or < -50
+}
+
+export interface CulturalAspect {
+    id: string;
+    name: string;
+    description: string;
+    unlockConditions: CulturalAspectUnlockCondition[];
+}

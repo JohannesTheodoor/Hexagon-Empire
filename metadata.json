@@ -1,0 +1,5 @@
+{
+  "name": "HexGrid Empires",
+  "description": "A turn-based hexagonal strategy game built with React and Tailwind CSS. Conquer the map by building armies, managing resources, and capturing cities. Features multiple terrain types that affect movement and income.",
+  "requestFramePermissions": []
+}
