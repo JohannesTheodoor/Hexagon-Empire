@@ -17,13 +17,15 @@ interface HexagonProps {
   isAttackable: boolean;
   isExpandable: boolean;
   isDeployable: boolean;
+  isCampSelectable?: boolean;
+  isCampSelected?: boolean;
   isInPath: boolean;
   isStarving: boolean;
   influenceBorderColor?: string;
   onClick: () => void;
 }
 
-const Hexagon: React.FC<HexagonProps> = ({ hex, army, unitsInArmy, city, player, isSelected, isExplored, isVisible, isReachable, isAttackable, isExpandable, isDeployable, isInPath, isStarving, influenceBorderColor, onClick }) => {
+const Hexagon: React.FC<HexagonProps> = ({ hex, army, unitsInArmy, city, player, isSelected, isExplored, isVisible, isReachable, isAttackable, isExpandable, isDeployable, isCampSelectable, isCampSelected, isInPath, isStarving, influenceBorderColor, onClick }) => {
   const BORDER_OFFSET = 2;
   const CELL_SIZE = HEX_SIZE;
   const RENDER_SIZE = CELL_SIZE - BORDER_OFFSET;
@@ -182,6 +184,8 @@ const Hexagon: React.FC<HexagonProps> = ({ hex, army, unitsInArmy, city, player,
                     {isInPath && <polygon points={renderPoints} fill="rgba(59, 130, 246, 0.6)" />}
                     {isExpandable && <polygon points={renderPoints} fill="rgba(74, 222, 128, 0.5)" />}
                     {isDeployable && <polygon points={renderPoints} fill="rgba(167, 139, 250, 0.6)" />}
+                    {isCampSelectable && <polygon points={renderPoints} fill="rgba(203, 213, 225, 0.5)" />}
+                    {isCampSelected && <polygon points={renderPoints} fill="rgba(253, 224, 71, 0.6)" />}
                 </svg>
 
                 <div className="absolute inset-0 flex items-center justify-center text-white" style={{ top: `${RENDER_SIZE * (Math.sqrt(3) - 2) / 2}px` }}>

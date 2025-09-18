@@ -14,8 +14,15 @@ export const CAMP_VISION_RANGE = 1;
 export const CAMP_INFLUENCE_RANGE = 1;
 export const BUY_INFLUENCE_TILE_COST = 50;
 export const CAMP_DEFENSE_BONUS = 3;
-export const INITIAL_CAMP_POPULATION_MILESTONE = 10;
-export const CAMP_POPULATION_PER_LEVEL = 10;
+export const GATHERING_YIELD_PER_POINT = 0.5;
+
+// New Camp XP System Constants
+export const CAMP_XP_PER_TURN = 10;
+export const CAMP_XP_PER_BUILDING_PROD_COST = 0.5; // 50% of production cost as XP
+export const CAMP_XP_PER_UNIT_PROD_COST = 0.25; // 25% of production cost as XP
+export const CAMP_XP_PER_NEW_MEMBER = 20; // XP for merging or reproduction
+export const INITIAL_XP_TO_NEXT_LEVEL = 150; // XP needed for Lvl 1 -> Lvl 2
+export const XP_LEVEL_MULTIPLIER = 1.5; // Each level costs 1.5x the previous
 
 
 export const BASE_CITY_INCOME = 5;

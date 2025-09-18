@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { GameState, UnitType, Unit, TerrainType, CampBuildingType, BuildQueueItem, Gender, Army } from '../types';
-import { UNIT_DEFINITIONS, TERRAIN_DEFINITIONS, CAMP_BUILDING_DEFINITIONS, CAMP_POPULATION_PER_LEVEL, INITIAL_CAMP_POPULATION_MILESTONE } from '../constants';
-import { CloseIcon, ResearchIcon, PlusIcon, InfantryIcon, TankIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, PalisadeIcon, ScoutTentIcon, ForagingPostIcon } from './Icons';
+import { UNIT_DEFINITIONS, TERRAIN_DEFINITIONS, CAMP_BUILDING_DEFINITIONS, GATHERING_YIELD_PER_POINT } from '../constants';
+import { CloseIcon, ResearchIcon, PlusIcon, InfantryIcon, TankIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, PalisadeIcon, ScoutTentIcon, ForagingPostIcon, WoodIcon, StoneIcon, HidesIcon, ObsidianIcon } from './Icons';
 import StackedUnitCard from './StackedUnitCard';
 import { axialToString } from '../utils/hexUtils';
 
@@ -11,6 +11,7 @@ interface CampScreenProps {
   onClose: () => void;
   onProduceInCamp: (armyId: string, itemType: UnitType | CampBuildingType, type: 'unit' | 'building') => void;
   onRenameArmy: (armyId: string, newName: string) => void;
+  onUpdateFocus: (armyId: string, focus: { productionFocus: number; resourceFocus: Army['resourceFocus']}) => void;
 }
 
 const EditableArmyName: React.FC<{ army: Army; onRename: (newName: string) => void }> = ({ army, onRename }) => {
@@ -83,8 +84,11 @@ const renderBuildingIcon = (buildingType: CampBuildingType) => {
     }
 }
 
-const CampScreen: React.FC<CampScreenProps> = ({ gameState, armyId, onClose, onProduceInCamp, onRenameArmy }) => {
+const CampScreen: React.FC<CampScreenProps> = ({ gameState, armyId, onClose, onProduceInCamp, onRenameArmy, onUpdateFocus }) => {
   const army = gameState.armies.get(armyId);
+  const [productionFocus, setProductionFocus] = useState(army?.productionFocus ?? 100);
+  const [resourceFocus, setResourceFocus] = useState(army?.resourceFocus ?? { wood: false, stone: false, hides: false, obsidian: false });
+
   if (!army || !army.isCamped || army.level === undefined) return null;
 
   const player = gameState.players.find(p => p.id === army.ownerId);
@@ -102,27 +106,43 @@ const CampScreen: React.FC<CampScreenProps> = ({ gameState, armyId, onClose, onP
   }, new Map<UnitType, Unit[]>());
 
   const armyHex = gameState.hexes.get(axialToString(army.position));
-  const hexFood = armyHex?.currentFood ?? 0;
   const terrainDef = armyHex ? TERRAIN_DEFINITIONS[armyHex.terrain] : null;
 
-  // Calculate stats
-  const totalProductionYield = garrisonedUnits.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].productionYield, 0);
-  const foodConsumption = garrisonedUnits.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].foodConsumption, 0);
-  const totalFoodStored = garrisonedUnits.reduce((sum, u) => sum + u.foodStored, 0);
-  const totalCarryCapacity = garrisonedUnits.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].carryCapacity, 0);
-  
-  let totalGatherRate = garrisonedUnits.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].foodGatherRate, 0);
-   if (army.buildings?.includes(CampBuildingType.ForagingPost)) {
-        totalGatherRate += CAMP_BUILDING_DEFINITIONS[CampBuildingType.ForagingPost].foodGatherBonus!;
+  const availableResources = useMemo(() => {
+    const available = { wood: 0, stone: 0, hides: 0, obsidian: 0 };
+    if (!army.controlledTiles) return available;
+    for (const tileKey of army.controlledTiles) {
+        const hex = gameState.hexes.get(tileKey);
+        if (hex) {
+            if (hex.currentWood > 0) available.wood += Math.floor(hex.currentWood);
+            if (hex.currentStone > 0) available.stone += Math.floor(hex.currentStone);
+            if (hex.currentHides > 0) available.hides += Math.floor(hex.currentHides);
+            if (hex.currentObsidian > 0) available.obsidian += Math.floor(hex.currentObsidian);
+        }
     }
+    return available;
+  }, [army.controlledTiles, gameState.hexes]);
 
-  const foodToGather = Math.min(hexFood, totalGatherRate);
-  const netFood = foodToGather - foodConsumption;
+  const totalWorkPoints = garrisonedUnits.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].productionYield, 0);
+  const productionPoints = totalWorkPoints * (productionFocus / 100);
+  const gatheringPoints = totalWorkPoints * ((100 - productionFocus) / 100);
+  const focusedResourcesCount = Object.values(resourceFocus).filter(v => v).length;
+  const pointsPerResource = focusedResourcesCount > 0 ? gatheringPoints / focusedResourcesCount : 0;
+  const projectedYield = Math.round(pointsPerResource * GATHERING_YIELD_PER_POINT);
 
-  const prevPopMilestone = army.level > 1 ? INITIAL_CAMP_POPULATION_MILESTONE + (army.level - 2) * CAMP_POPULATION_PER_LEVEL : 0;
-  const popProgressToNextLevel = (army.population ?? 0) - prevPopMilestone;
-  const popRangeForLevel = (army.nextPopulationMilestone ?? INITIAL_CAMP_POPULATION_MILESTONE) - prevPopMilestone;
-  const progressPercentage = (popProgressToNextLevel / popRangeForLevel) * 100;
+  const progressPercentage = (army.xp ?? 0) / (army.xpToNextLevel ?? 1) * 100;
+  
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newFocus = parseInt(e.target.value, 10);
+    setProductionFocus(newFocus);
+    onUpdateFocus(army.id, { productionFocus: newFocus, resourceFocus });
+  };
+  
+  const handleCheckboxChange = (resource: keyof typeof resourceFocus) => {
+    const newResourceFocus = { ...resourceFocus, [resource]: !resourceFocus[resource] };
+    setResourceFocus(newResourceFocus);
+    onUpdateFocus(army.id, { productionFocus, resourceFocus: newResourceFocus });
+  };
 
   const renderUnitProduction = () => {
     if (!isCurrentPlayerCamp) return null;
@@ -218,7 +238,7 @@ const CampScreen: React.FC<CampScreenProps> = ({ gameState, armyId, onClose, onP
           </div>
           <div className="text-right">
               <p className="text-2xl font-bold">Level {army.level}</p>
-              <p className="text-sm text-gray-400">Next level at {army.nextPopulationMilestone} Pop</p>
+              <p className="text-sm text-gray-400">XP: {Math.floor(army.xp ?? 0)} / {army.xpToNextLevel}</p>
           </div>
         </div>
         
@@ -236,18 +256,11 @@ const CampScreen: React.FC<CampScreenProps> = ({ gameState, armyId, onClose, onP
                 )}
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-300 mb-1">Population</h3>
-              <p className="text-2xl font-bold">{army.population} / {army.nextPopulationMilestone}</p>
+              <h3 className="text-lg font-semibold text-gray-300 mb-1">Camp Growth</h3>
+              <p className="text-lg font-bold">XP: {Math.floor(army.xp ?? 0)} / {army.xpToNextLevel}</p>
               <div className="w-full h-2.5 bg-gray-700 rounded-full overflow-hidden border border-black my-1">
-                <div className="bg-blue-500 h-full rounded-full transition-all duration-300" style={{ width: `${progressPercentage}%` }}></div>
+                <div className="bg-purple-500 h-full rounded-full transition-all duration-300" style={{ width: `${progressPercentage}%` }}></div>
               </div>
-            </div>
-             <div>
-                <h3 className="text-lg font-semibold text-gray-300 mb-1">Food Supply</h3>
-                <p>Stored: <span className="font-semibold text-yellow-300">{totalFoodStored} / {totalCarryCapacity}</span></p>
-                <p>On Tile: <span className="font-semibold text-green-300">{hexFood} / {terrainDef?.maxFood}</span></p>
-                <p>Gather: <span className="font-semibold text-green-400">+{foodToGather}/t</span> | Cons: <span className="font-semibold text-red-400">-{foodConsumption}/t</span></p>
-                <p className={`font-bold ${netFood >= 0 ? 'text-green-500' : 'text-red-500'}`}>Net: {netFood >= 0 ? '+' : ''}{netFood}/t</p>
             </div>
           </div>
           
@@ -272,13 +285,46 @@ const CampScreen: React.FC<CampScreenProps> = ({ gameState, armyId, onClose, onP
                     return <div key={index} className="bg-gray-900/80 rounded-lg h-24"></div>
                 })}
              </div>
+             {isCurrentPlayerCamp && (
+                <div className="mt-4 pt-4 border-t-2 border-gray-700">
+                    <h3 className="text-lg font-semibold text-gray-300 mb-2">Workforce Allocation</h3>
+                    <div className="bg-gray-900/50 p-3 rounded-lg">
+                        <div className="flex justify-between text-sm font-semibold">
+                            <span>Gathering</span>
+                            <span>Production</span>
+                        </div>
+                        <input type="range" min="0" max="100" value={productionFocus} onChange={handleSliderChange} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500 my-1"/>
+                        <div className="flex justify-between text-xs text-gray-400">
+                            <span>{Math.round(gatheringPoints)} points</span>
+                            <span>{Math.round(productionPoints)} points</span>
+                        </div>
+
+                        <h4 className="text-md font-semibold mt-3 mb-2 text-gray-400">Resource Focus</h4>
+                        <div className="grid grid-cols-2 gap-2">
+                            {Object.keys(resourceFocus).map(res => {
+                                const typedRes = res as keyof typeof resourceFocus;
+                                return (
+                                <label key={res} className={`flex items-center gap-2 p-2 rounded ${availableResources[typedRes] === 0 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-700/50'}`}>
+                                    <input type="checkbox" checked={resourceFocus[typedRes]} onChange={() => handleCheckboxChange(typedRes)} disabled={availableResources[typedRes] === 0} className="form-checkbox h-5 w-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500" />
+                                    <span className="capitalize flex-grow">{res}</span>
+                                    <span className="text-xs text-gray-400">
+                                        {resourceFocus[typedRes] && <span className="text-green-400 font-semibold">+{projectedYield}</span>}
+                                        <span className="ml-2">Av: {availableResources[typedRes]}</span>
+                                    </span>
+                                </label>
+                                )}
+                            )}
+                        </div>
+                    </div>
+                </div>
+             )}
              {renderBuildingProduction()}
           </div>
           
           {/* Right Column: Production Queue */}
           <div className="md:col-span-1">
             <h3 className="text-lg font-semibold text-gray-300 mb-2">Production Queue ({army.buildQueue?.length ?? 0})</h3>
-            <p className="text-sm text-gray-400 mb-2">Production Yield: <span className="font-bold text-blue-400">{totalProductionYield}</span> / turn</p>
+            <p className="text-sm text-gray-400 mb-2">Production Points: <span className="font-bold text-blue-400">{Math.round(productionPoints)}</span> / turn</p>
             <div className="bg-gray-900/50 p-3 rounded-lg flex-grow flex flex-col">
                 <div className="space-y-3 overflow-y-auto flex-grow mb-4">
                     {(army.buildQueue?.length ?? 0) > 0 ? (
@@ -287,7 +333,7 @@ const CampScreen: React.FC<CampScreenProps> = ({ gameState, armyId, onClose, onP
                                 ? item.itemType 
                                 : CAMP_BUILDING_DEFINITIONS[item.itemType as CampBuildingType].name;
                             const progressPercentage = (item.progress / item.productionCost) * 100;
-                            const turnsLeft = totalProductionYield > 0 ? Math.ceil((item.productionCost - item.progress) / totalProductionYield) : '∞';
+                            const turnsLeft = productionPoints > 0 ? Math.ceil((item.productionCost - item.progress) / productionPoints) : '∞';
                             return (
                                 <div key={item.id} className="p-2 bg-gray-700/50 rounded">
                                     <div className="flex items-center justify-between gap-3 mb-1">

@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { GameState, City, UnitType, BuildingType, BuildQueueItem, Unit, TerrainType, Gender } from '../types';
-import { BASE_CITY_INCOME, INCOME_PER_INFLUENCE_LEVEL, BUILDING_DEFINITIONS, UNIT_DEFINITIONS, TERRAIN_DEFINITIONS, BASE_CITY_FOOD_STORAGE } from '../constants';
+import { BASE_CITY_INCOME, INCOME_PER_INFLUENCE_LEVEL, BUILDING_DEFINITIONS, UNIT_DEFINITIONS, TERRAIN_DEFINITIONS, BASE_CITY_FOOD_STORAGE, GATHERING_YIELD_PER_POINT } from '../constants';
 import { CloseIcon, FoodIcon, InfantryIcon, TankIcon, MarketplaceIcon, GranaryIcon, PlusIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, WoodIcon, StoneIcon, HidesIcon, ObsidianIcon } from './Icons';
 import { TECH_TREE } from '../techtree';
 import StackedUnitCard from './StackedUnitCard';
@@ -11,6 +11,7 @@ interface CityScreenProps {
   onClose: () => void;
   onBuildBuilding: (cityId: string, buildingType: BuildingType) => void;
   onProduceUnit: (unitType: UnitType, cityId: string) => void;
+  onUpdateFocus: (cityId: string, focus: { productionFocus: number; resourceFocus: City['resourceFocus']}) => void;
 }
 
 const renderQueueItemIcon = (item: BuildQueueItem) => {
@@ -43,8 +44,12 @@ const renderBuildingIcon = (buildingType: BuildingType) => {
     }
 }
 
-const CityScreen: React.FC<CityScreenProps> = ({ gameState, cityId, onClose, onBuildBuilding, onProduceUnit }) => {
+const CityScreen: React.FC<CityScreenProps> = ({ gameState, cityId, onClose, onBuildBuilding, onProduceUnit, onUpdateFocus }) => {
   const city = gameState.cities.get(cityId);
+  
+  const [productionFocus, setProductionFocus] = useState(city?.productionFocus ?? 100);
+  const [resourceFocus, setResourceFocus] = useState(city?.resourceFocus ?? { wood: false, stone: false, hides: false, obsidian: false });
+
   if (!city) return null;
 
   const player = gameState.players.find(p => p.id === city.ownerId);
@@ -62,42 +67,45 @@ const CityScreen: React.FC<CityScreenProps> = ({ gameState, cityId, onClose, onB
   }, new Map<UnitType, Unit[]>());
 
 
-  // Calculate stats based on new system
-  const cityProductionYield = garrisonedUnits.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].productionYield, 0);
+  const totalWorkPoints = garrisonedUnits.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].productionYield, 0);
   const foodConsumption = garrisonedUnits.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].foodConsumption, 0);
   
   const hasFishing = player.unlockedTechs.includes('fishing');
   const fishingFoodBonus = hasFishing ? TECH_TREE['fishing'].effects.find(e => e.payload.bonus === 'food_from_water')?.payload.value ?? 0 : 0;
 
-  const resourceYields = { food: 0, wood: 0, stone: 0, hides: 0, obsidian: 0 };
-  for (const tileKey of city.controlledTiles) {
-    const hex = gameState.hexes.get(tileKey);
-    if (hex && !hex.armyId && !hex.cityId) { 
-      const terrainDef = TERRAIN_DEFINITIONS[hex.terrain];
-      resourceYields.food += terrainDef.foodRegrowth;
-      resourceYields.wood += hex.currentWood > 0 ? terrainDef.woodRegrowth : 0;
-      resourceYields.hides += hex.currentHides > 0 ? terrainDef.hidesRegrowth : 0;
-      resourceYields.stone += hex.currentStone;
-      resourceYields.obsidian += hex.currentObsidian;
-    }
-    if (hex && hex.terrain === TerrainType.Sea || hex.terrain === TerrainType.Lake) {
-        resourceYields.food += fishingFoodBonus;
-    }
-  }
-  
-  let foodProductionFromBuildings = 0;
-  for (const buildingType of city.buildings) {
-    foodProductionFromBuildings += BUILDING_DEFINITIONS[buildingType].foodBonus ?? 0;
-  }
-  resourceYields.food += foodProductionFromBuildings;
+  const { yields, availableResources } = useMemo(() => {
+    const yields = { food: 0, wood: 0, stone: 0, hides: 0, obsidian: 0 };
+    const available = { wood: 0, stone: 0, hides: 0, obsidian: 0 };
+    for (const tileKey of city.controlledTiles) {
+        const hex = gameState.hexes.get(tileKey);
+        if (hex) {
+            if (hex.currentWood > 0) available.wood += hex.currentWood;
+            if (hex.currentStone > 0) available.stone += hex.currentStone;
+            if (hex.currentHides > 0) available.hides += hex.currentHides;
+            if (hex.currentObsidian > 0) available.obsidian += hex.currentObsidian;
 
-  const foodSurplus = resourceYields.food - foodConsumption;
+            if (!hex.armyId && !hex.cityId) { 
+                const terrainDef = TERRAIN_DEFINITIONS[hex.terrain];
+                yields.food += terrainDef.foodRegrowth;
+            }
+            if (hex.terrain === TerrainType.Sea || hex.terrain === TerrainType.Lake) {
+                yields.food += fishingFoodBonus;
+            }
+        }
+    }
+     for (const buildingType of city.buildings) {
+        yields.food += BUILDING_DEFINITIONS[buildingType].foodBonus ?? 0;
+    }
+    return { yields, availableResources: available };
+  }, [city.controlledTiles, city.buildings, gameState.hexes, fishingFoodBonus]);
+
+
+  const foodSurplus = yields.food - foodConsumption;
   
   let foodStorageCapacity = BASE_CITY_FOOD_STORAGE;
   for (const buildingType of city.buildings) {
       foodStorageCapacity += BUILDING_DEFINITIONS[buildingType].foodStorageBonus ?? 0;
   }
-
 
   let goldFromCity = BASE_CITY_INCOME + (city.controlledTiles.length - 1) * INCOME_PER_INFLUENCE_LEVEL;
   for(const buildingType of city.buildings) {
@@ -108,8 +116,18 @@ const CityScreen: React.FC<CityScreenProps> = ({ gameState, cityId, onClose, onB
   const popProgressToNextLevel = city.population - prevPopMilestone;
   const popRangeForLevel = city.nextPopulationMilestone - prevPopMilestone;
   const progressPercentage = (popProgressToNextLevel / popRangeForLevel) * 100;
-  const popGrowth = city.level; // Placeholder for future growth mechanic
-  const willGrow = city.food > city.population; // Simplified check
+
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newFocus = parseInt(e.target.value, 10);
+    setProductionFocus(newFocus);
+    onUpdateFocus(city.id, { productionFocus: newFocus, resourceFocus });
+  };
+  
+  const handleCheckboxChange = (resource: keyof typeof resourceFocus) => {
+    const newResourceFocus = { ...resourceFocus, [resource]: !resourceFocus[resource] };
+    setResourceFocus(newResourceFocus);
+    onUpdateFocus(city.id, { productionFocus, resourceFocus: newResourceFocus });
+  };
 
   const renderUnitProduction = () => {
     if (!isCurrentPlayerCity) return null;
@@ -159,6 +177,11 @@ const CityScreen: React.FC<CityScreenProps> = ({ gameState, cityId, onClose, onB
     )
 }
   const buildingSlots = Array.from({ length: city.level });
+  const productionPoints = totalWorkPoints * (productionFocus / 100);
+  const gatheringPoints = totalWorkPoints * ((100 - productionFocus) / 100);
+  const focusedResourcesCount = Object.values(resourceFocus).filter(v => v).length;
+  const pointsPerResource = focusedResourcesCount > 0 ? gatheringPoints / focusedResourcesCount : 0;
+  const projectedYield = Math.round(pointsPerResource * GATHERING_YIELD_PER_POINT);
 
   return (
     <div 
@@ -216,17 +239,13 @@ const CityScreen: React.FC<CityScreenProps> = ({ gameState, cityId, onClose, onB
                 <div className="grid grid-cols-2 text-sm gap-x-4">
                   <p>Gold: <span className="font-semibold text-yellow-400">+{goldFromCity}</span></p>
                   <p className="flex items-center gap-1.5"><FoodIcon className="w-4 h-4" /> Food: <span className={`font-semibold ${foodSurplus >= 0 ? 'text-green-400' : 'text-red-400'}`}>{foodSurplus >= 0 ? '+' : ''}{foodSurplus}</span></p>
-                  <p className="flex items-center gap-1.5"><WoodIcon className="w-4 h-4" /> Wood: <span className="font-semibold text-green-400">+{resourceYields.wood}</span></p>
-                  <p className="flex items-center gap-1.5"><StoneIcon className="w-4 h-4" /> Stone: <span className="font-semibold text-green-400">+{resourceYields.stone}</span></p>
-                  <p className="flex items-center gap-1.5"><HidesIcon className="w-4 h-4" /> Hides: <span className="font-semibold text-green-400">+{resourceYields.hides}</span></p>
-                  <p className="flex items-center gap-1.5"><ObsidianIcon className="w-4 h-4" /> Obsidian: <span className="font-semibold text-green-400">+{resourceYields.obsidian}</span></p>
                 </div>
                  <p className="text-xs text-gray-400 mt-1">Food Stored: {city.food}/{foodStorageCapacity}</p>
             </div>
 
           </div>
           
-          {/* Middle Column: Buildings */}
+          {/* Middle Column: Buildings & Workforce */}
           <div className="md:col-span-1">
              <h3 className="text-lg font-semibold text-gray-300 mb-2">Buildings ({city.buildings.length} / {city.level})</h3>
              <div className="grid grid-cols-2 gap-2">
@@ -241,29 +260,52 @@ const CityScreen: React.FC<CityScreenProps> = ({ gameState, cityId, onClose, onB
                             </div>
                         )
                     }
-                    // Only show build slot if not queued
-                    const isSlotQueued = city.buildQueue.some(item => item.type === 'building'); // simplistic check
+                    const isSlotQueued = city.buildQueue.some(item => item.type === 'building');
                     if (isCurrentPlayerCity && !isSlotQueued && city.buildings.length < city.level && index === city.buildings.length) {
-                         return (
-                            <button 
-                                key={index} 
-                                onClick={() => onBuildBuilding(city.id, BuildingType.Marketplace)} // This needs a menu
-                                disabled={!isCurrentPlayerCity}
-                                className="bg-gray-900/50 p-2 rounded-lg flex items-center justify-center h-24 hover:bg-gray-700 disabled:cursor-not-allowed transition-colors"
-                            >
-                                <PlusIcon className="w-10 h-10 text-gray-500" />
-                            </button>
-                        )
+                         return <button key={index} onClick={() => onBuildBuilding(city.id, BuildingType.Marketplace)} disabled={!isCurrentPlayerCity} className="bg-gray-900/50 p-2 rounded-lg flex items-center justify-center h-24 hover:bg-gray-700 disabled:cursor-not-allowed transition-colors"><PlusIcon className="w-10 h-10 text-gray-500" /></button>
                     }
                     return <div key={index} className="bg-gray-900/80 rounded-lg h-24"></div>
                 })}
              </div>
+             {isCurrentPlayerCity && (
+                <div className="mt-4 pt-4 border-t-2 border-gray-700">
+                    <h3 className="text-lg font-semibold text-gray-300 mb-2">Workforce Allocation</h3>
+                    <div className="bg-gray-900/50 p-3 rounded-lg">
+                        <div className="flex justify-between text-sm font-semibold">
+                            <span>Gathering</span>
+                            <span>Production</span>
+                        </div>
+                        <input type="range" min="0" max="100" value={productionFocus} onChange={handleSliderChange} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500 my-1"/>
+                        <div className="flex justify-between text-xs text-gray-400">
+                            <span>{Math.round(gatheringPoints)} points</span>
+                            <span>{Math.round(productionPoints)} points</span>
+                        </div>
+
+                        <h4 className="text-md font-semibold mt-3 mb-2 text-gray-400">Resource Focus</h4>
+                        <div className="grid grid-cols-2 gap-2">
+                            {Object.keys(resourceFocus).map(res => {
+                                const typedRes = res as keyof typeof resourceFocus;
+                                return (
+                                    <label key={res} className={`flex items-center gap-2 p-2 rounded ${availableResources[typedRes] === 0 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-700/50'}`}>
+                                        <input type="checkbox" checked={resourceFocus[typedRes]} onChange={() => handleCheckboxChange(typedRes)} disabled={availableResources[typedRes] === 0} className="form-checkbox h-5 w-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500" />
+                                        <span className="capitalize flex-grow">{res}</span>
+                                        <span className="text-xs text-gray-400">
+                                            {resourceFocus[typedRes] && <span className="text-green-400 font-semibold">+{projectedYield}</span>}
+                                            <span className="ml-2">Av: {availableResources[typedRes]}</span>
+                                        </span>
+                                    </label>
+                                )
+                            })}
+                        </div>
+                    </div>
+                </div>
+             )}
           </div>
           
           {/* Right Column: Production Queue */}
             <div className="md:col-span-1">
                 <h3 className="text-lg font-semibold text-gray-300 mb-2">Production Queue ({city.buildQueue.length})</h3>
-                <p className="text-sm text-gray-400 mb-2">Production Yield: <span className="font-bold text-blue-400">{cityProductionYield}</span> / turn</p>
+                <p className="text-sm text-gray-400 mb-2">Production Points: <span className="font-bold text-blue-400">{Math.round(productionPoints)}</span> / turn</p>
                 <div className="bg-gray-900/50 p-3 rounded-lg flex-grow flex flex-col">
                     <div className="space-y-3 overflow-y-auto flex-grow mb-4">
                         {city.buildQueue.length > 0 ? (
@@ -272,8 +314,7 @@ const CityScreen: React.FC<CityScreenProps> = ({ gameState, cityId, onClose, onB
                                     ? item.itemType 
                                     : BUILDING_DEFINITIONS[item.itemType as BuildingType].name;
                                 const progressPercentage = (item.progress / item.productionCost) * 100;
-                                
-                                const turnsLeft = cityProductionYield > 0 ? Math.ceil((item.productionCost - item.progress) / cityProductionYield) : '∞';
+                                const turnsLeft = productionPoints > 0 ? Math.ceil((item.productionCost - item.progress) / productionPoints) : '∞';
 
                                 return (
                                     <div key={item.id} className="p-2 bg-gray-700/50 rounded">
@@ -299,7 +340,6 @@ const CityScreen: React.FC<CityScreenProps> = ({ gameState, cityId, onClose, onB
                 </div>
             </div>
         </div>
-
       </div>
     </div>
   );

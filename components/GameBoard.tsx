@@ -14,12 +14,14 @@ interface GameBoardProps {
   attackableHexes: Set<string>;
   expandableHexes: Set<string>;
   deployableHexes: Set<string>;
+  campSelectableHexes: Set<string>;
+  campSelectedHexes: Set<string>;
   influenceMap: Map<string, string>;
   onHexClick: (coords: AxialCoords) => void;
   viewState: { scale: number; translate: { x: number; y: number } };
 }
 
-const GameBoard: React.FC<GameBoardProps> = ({ gameState, fogOfWarEnabled, visibleHexes, exploredHexes, selectedHex, reachableHexes, attackableHexes, expandableHexes, deployableHexes, influenceMap, onHexClick, viewState }) => {
+const GameBoard: React.FC<GameBoardProps> = ({ gameState, fogOfWarEnabled, visibleHexes, exploredHexes, selectedHex, reachableHexes, attackableHexes, expandableHexes, deployableHexes, campSelectableHexes, campSelectedHexes, influenceMap, onHexClick, viewState }) => {
   const boardWidth = HEX_SIZE * 3 / 2 * MAP_WIDTH + HEX_SIZE / 2;
   const boardHeight = HEX_SIZE * Math.sqrt(3) * MAP_HEIGHT;
 
@@ -69,6 +71,8 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameState, fogOfWarEnabled, visib
                 isAttackable={attackableHexes.has(hexKey)}
                 isExpandable={expandableHexes.has(hexKey)}
                 isDeployable={deployableHexes.has(hexKey)}
+                isCampSelectable={campSelectableHexes.has(hexKey)}
+                isCampSelected={campSelectedHexes.has(hexKey)}
                 isInPath={false} // Pathfinding visualization not implemented yet
                 isStarving={isStarving}
                 influenceBorderColor={influenceBorderColor}

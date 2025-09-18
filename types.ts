@@ -150,7 +150,15 @@ export interface Army {
   population?: number;
   buildings?: CampBuildingType[];
   buildQueue?: BuildQueueItem[];
-  nextPopulationMilestone?: number;
+  xp?: number;
+  xpToNextLevel?: number;
+  productionFocus?: number; // 0-100, only when isCamped
+  resourceFocus?: { // only when isCamped
+      wood: boolean;
+      stone: boolean;
+      hides: boolean;
+      obsidian: boolean;
+  };
 }
 
 export interface City {
@@ -170,6 +178,13 @@ export interface City {
   controlledTiles: string[];
   pendingInfluenceExpansions: number;
   nextPopulationMilestone: number;
+  productionFocus: number; // 0-100
+  resourceFocus: {
+      wood: boolean;
+      stone: boolean;
+      hides: boolean;
+      obsidian: boolean;
+  };
 }
 
 export interface PlayerCulture {

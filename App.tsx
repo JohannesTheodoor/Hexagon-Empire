@@ -11,7 +11,7 @@ import CultureScreen from './components/CultureScreen';
 import CreateArmyScreen from './components/CreateArmyScreen';
 // FIX: Import UnitDefinition to resolve 'Cannot find name' error.
 import { GameState, AxialCoords, Hex, TerrainType, Unit, UnitType, City, Player, UnitSize, BuildingType, BuildQueueItem, TechEffectType, Army, ArmyDeploymentInfo, Gender, CampBuildingType, UnitDefinition } from './types';
-import { MAP_WIDTH, MAP_HEIGHT, TERRAIN_DEFINITIONS, UNIT_DEFINITIONS, axialDirections, CITY_HP, UNIT_VISION_RANGE, CITY_VISION_RANGE, BUY_INFLUENCE_TILE_COST, BASE_CITY_INCOME, INCOME_PER_INFLUENCE_LEVEL, UNIT_HEAL_AMOUNT, INITIAL_CITY_POPULATION, BUILDING_DEFINITIONS, STARVATION_DAMAGE, CAMP_DEFENSE_BONUS, BASE_CITY_FOOD_STORAGE, CAMP_INFLUENCE_RANGE, INITIAL_CAMP_POPULATION_MILESTONE, CAMP_POPULATION_PER_LEVEL, CAMP_VISION_RANGE, CAMP_BUILDING_DEFINITIONS } from './constants';
+import { MAP_WIDTH, MAP_HEIGHT, TERRAIN_DEFINITIONS, UNIT_DEFINITIONS, axialDirections, CITY_HP, UNIT_VISION_RANGE, CITY_VISION_RANGE, BUY_INFLUENCE_TILE_COST, BASE_CITY_INCOME, INCOME_PER_INFLUENCE_LEVEL, UNIT_HEAL_AMOUNT, INITIAL_CITY_POPULATION, BUILDING_DEFINITIONS, STARVATION_DAMAGE, CAMP_DEFENSE_BONUS, BASE_CITY_FOOD_STORAGE, CAMP_INFLUENCE_RANGE, CAMP_VISION_RANGE, CAMP_BUILDING_DEFINITIONS, CAMP_XP_PER_TURN, CAMP_XP_PER_BUILDING_PROD_COST, CAMP_XP_PER_UNIT_PROD_COST, CAMP_XP_PER_NEW_MEMBER, INITIAL_XP_TO_NEXT_LEVEL, XP_LEVEL_MULTIPLIER, GATHERING_YIELD_PER_POINT } from './constants';
 import { axialToString, stringToAxial, getHexesInRange, hexDistance, axialToPixel } from './utils/hexUtils';
 import { playSound, setVolume, setMuted, ensureAudioInitialized } from './utils/soundManager';
 import { TECH_TREE } from './techtree';
@@ -97,6 +97,7 @@ const App: React.FC = () => {
     const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
     const [selectedArmyId, setSelectedArmyId] = useState<string | null>(null);
     const [reachableHexes, setReachableHexes] = useState<Set<string>>(new Set());
+    const [pathCosts, setPathCosts] = useState<Map<string, number>>(new Map());
     const [attackableHexes, setAttackableHexes] = useState<Set<string>>(new Set());
     const [expandableHexes, setExpandableHexes] = useState<Set<string>>(new Set());
     const [deployableHexes, setDeployableHexes] = useState<Set<string>>(new Set());
@@ -306,7 +307,7 @@ const App: React.FC = () => {
             units.set(womanId, { id: womanId, type: UnitType.Tribeswoman, ownerId: 1, hp: womanDef.maxHp, foodStored: 0, gender: Gender.Female });
             p1StartGarrison.push(womanId);
         }
-        const p1City: City = { id: p1CityId, name: 'Capital 1', ownerId: 1, position: p1CityPos, hp: CITY_HP, maxHp: CITY_HP, population: p1StartGarrison.length, food: 50, foodStorageCapacity: BASE_CITY_FOOD_STORAGE, level: 1, buildings: [], buildQueue: [], garrison: p1StartGarrison, controlledTiles: [p1CityKey], pendingInfluenceExpansions: 0, nextPopulationMilestone: INITIAL_CITY_POPULATION * 2 };
+        const p1City: City = { id: p1CityId, name: 'Capital 1', ownerId: 1, position: p1CityPos, hp: CITY_HP, maxHp: CITY_HP, population: p1StartGarrison.length, food: 50, foodStorageCapacity: BASE_CITY_FOOD_STORAGE, level: 1, buildings: [], buildQueue: [], garrison: p1StartGarrison, controlledTiles: [p1CityKey], pendingInfluenceExpansions: 0, nextPopulationMilestone: INITIAL_CITY_POPULATION * 2, productionFocus: 100, resourceFocus: { wood: false, stone: false, hides: false, obsidian: false } };
         cities.set(p1CityId, p1City);
         hexes.get(p1CityKey)!.cityId = p1CityId;
 
@@ -328,7 +329,7 @@ const App: React.FC = () => {
             units.set(womanId, { id: womanId, type: UnitType.Tribeswoman, ownerId: 2, hp: womanDef.maxHp, foodStored: 0, gender: Gender.Female });
             p2StartGarrison.push(womanId);
         }
-        const p2City: City = { id: p2CityId, name: 'Capital 2', ownerId: 2, position: p2CityPos, hp: CITY_HP, maxHp: CITY_HP, population: p2StartGarrison.length, food: 50, foodStorageCapacity: BASE_CITY_FOOD_STORAGE, level: 1, buildings: [], buildQueue: [], garrison: p2StartGarrison, controlledTiles: [p2CityKey], pendingInfluenceExpansions: 0, nextPopulationMilestone: INITIAL_CITY_POPULATION * 2 };
+        const p2City: City = { id: p2CityId, name: 'Capital 2', ownerId: 2, position: p2CityPos, hp: CITY_HP, maxHp: CITY_HP, population: p2StartGarrison.length, food: 50, foodStorageCapacity: BASE_CITY_FOOD_STORAGE, level: 1, buildings: [], buildQueue: [], garrison: p2StartGarrison, controlledTiles: [p2CityKey], pendingInfluenceExpansions: 0, nextPopulationMilestone: INITIAL_CITY_POPULATION * 2, productionFocus: 100, resourceFocus: { wood: false, stone: false, hides: false, obsidian: false } };
         cities.set(p2CityId, p2City);
         hexes.get(p2CityKey)!.cityId = p2CityId;
 
@@ -416,58 +417,80 @@ const App: React.FC = () => {
         if (gameState) calculateVisibility(gameState);
     }, [gameState, calculateVisibility]);
 
-    const findReachableHexes = useCallback((start: AxialCoords, army: Army, gs: GameState): Set<string> => {
-        if (army.isCamped) return new Set();
-        const reachable = new Set<string>();
-        const frontier = new PriorityQueue<{ pos: AxialCoords; cost: number }>();
-        frontier.enqueue({ pos: start, cost: 0 }, 0);
-        
+    const calculateReachableHexes = useCallback((start: AxialCoords, army: Army, gs: GameState): { reachable: Set<string>; costs: Map<string, number> } => {
+        if (army.isCamped) return { reachable: new Set(), costs: new Map() };
+    
         const costSoFar: Map<string, number> = new Map();
         costSoFar.set(axialToString(start), 0);
-
-        const unitsInArmy = army.unitIds.map(id => gs.units.get(id)!);
-        const player = gs.players.find(p => p.id === army.ownerId)!;
+        const reachable = new Set<string>();
         
+        const player = gs.players.find(p => p.id === army.ownerId)!;
+        const unitsInArmy = army.unitIds.map(id => gs.units.get(id)!);
+    
+        // Dijkstra for moves within the budget
+        const frontier = new PriorityQueue<{ pos: AxialCoords; cost: number }>();
+        frontier.enqueue({ pos: start, cost: 0 }, 0);
+    
         while (!frontier.isEmpty()) {
             const current = frontier.dequeue();
             if (!current) break;
-
-            if (current.cost > 0) reachable.add(axialToString(current.pos));
-
+    
+            // Explore neighbors
             axialDirections.forEach(dir => {
                 const nextCoords = { q: current.pos.q + dir.q, r: current.pos.r + dir.r };
                 const nextKey = axialToString(nextCoords);
                 const nextHex = gs.hexes.get(nextKey);
-
+    
                 if (nextHex) {
                     const terrainDef = TERRAIN_DEFINITIONS[nextHex.terrain];
                     let moveCost = terrainDef.movementCost;
                     
-                    // Check for tech-locked tiles
                     if (terrainDef.requiredTech && !player.unlockedTechs.includes(terrainDef.requiredTech)) {
                         moveCost = 99;
                     }
-
-                    // Check if any unit in the army cannot traverse the terrain
-                    const isImpassable = unitsInArmy.some(u => {
-                        const unitDef = UNIT_DEFINITIONS[u.type];
-                        return unitDef.size === UnitSize.Large && nextHex.terrain === TerrainType.Forest;
-                    });
-                    if (isImpassable) moveCost = 99;
-
+                    const isImpassableByUnit = unitsInArmy.some(u => UNIT_DEFINITIONS[u.type].size === UnitSize.Large && nextHex.terrain === TerrainType.Forest);
+                    if (isImpassableByUnit) moveCost = 99;
+    
                     const newCost = current.cost + moveCost;
-                    
                     const isOccupiedByEnemy = nextHex.armyId && gs.armies.get(nextHex.armyId)?.ownerId !== army.ownerId;
-
+    
                     if (newCost <= army.movementPoints && !isOccupiedByEnemy && (!costSoFar.has(nextKey) || newCost < costSoFar.get(nextKey)!)) {
                         costSoFar.set(nextKey, newCost);
                         frontier.enqueue({ pos: nextCoords, cost: newCost }, newCost);
+                        reachable.add(nextKey);
                     }
                 }
             });
         }
-        
-        return reachable;
+    
+        // Add guaranteed first step moves
+        if (army.movementPoints > 0) {
+            axialDirections.forEach(dir => {
+                const nextCoords = { q: start.q + dir.q, r: start.r + dir.r };
+                const nextKey = axialToString(nextCoords);
+                const nextHex = gs.hexes.get(nextKey);
+                
+                if (nextHex) {
+                    const terrainDef = TERRAIN_DEFINITIONS[nextHex.terrain];
+                    let moveCost = terrainDef.movementCost;
+                    
+                    const isTechLocked = terrainDef.requiredTech && !player.unlockedTechs.includes(terrainDef.requiredTech);
+                    const isImpassableByUnit = unitsInArmy.some(u => UNIT_DEFINITIONS[u.type].size === UnitSize.Large && nextHex.terrain === TerrainType.Forest);
+                    const isOccupiedByEnemy = nextHex.armyId && gs.armies.get(nextHex.armyId)?.ownerId !== army.ownerId;
+                    
+                    const isPassable = !isTechLocked && !isImpassableByUnit && !isOccupiedByEnemy && moveCost < 99;
+
+                    if (isPassable) {
+                        reachable.add(nextKey);
+                        if (!costSoFar.has(nextKey)) {
+                            costSoFar.set(nextKey, moveCost);
+                        }
+                    }
+                }
+            });
+        }
+    
+        return { reachable, costs: costSoFar };
     }, []);
 
     const findAttackableHexes = useCallback((start: AxialCoords, army: Army, gs: GameState): Set<string> => {
@@ -508,14 +531,18 @@ const App: React.FC = () => {
         if(armyId) {
             const army = gameState.armies.get(armyId);
             if (army && army.ownerId === gameState.currentPlayerId) {
-                 setReachableHexes(findReachableHexes(army.position, army, gameState));
+                 const { reachable, costs } = calculateReachableHexes(army.position, army, gameState);
+                 setReachableHexes(reachable);
+                 setPathCosts(costs);
                  setAttackableHexes(findAttackableHexes(army.position, army, gameState));
             } else {
                  setReachableHexes(new Set());
+                 setPathCosts(new Map());
                  setAttackableHexes(new Set());
             }
         } else {
             setReachableHexes(new Set());
+            setPathCosts(new Map());
             setAttackableHexes(new Set());
         }
 
@@ -536,7 +563,7 @@ const App: React.FC = () => {
             setExpandableHexes(new Set());
         }
 
-    }, [gameState, selectedHex, findReachableHexes, findAttackableHexes]);
+    }, [gameState, selectedHex, calculateReachableHexes, findAttackableHexes]);
     
     const selectHex = useCallback((coords: AxialCoords | null) => {
         // Cancel army deployment if a different hex is selected
@@ -580,7 +607,10 @@ const App: React.FC = () => {
                 newArmy.population = newArmy.unitIds.length;
                 newArmy.buildings = [];
                 newArmy.buildQueue = [];
-                newArmy.nextPopulationMilestone = INITIAL_CAMP_POPULATION_MILESTONE;
+                newArmy.xp = 0;
+                newArmy.xpToNextLevel = INITIAL_XP_TO_NEXT_LEVEL;
+                newArmy.productionFocus = 100;
+                newArmy.resourceFocus = { wood: false, stone: false, hides: false, obsidian: false };
             }
     
             newGs.armies.set(armyId, newArmy);
@@ -762,6 +792,11 @@ const App: React.FC = () => {
                             // Combine units
                             stationaryArmy.unitIds.push(...movingArmy.unitIds);
 
+                            // Grant XP if merging into a camp
+                            if (stationaryArmy.isCamped) {
+                                stationaryArmy.xp = (stationaryArmy.xp ?? 0) + (movingArmy.unitIds.length * CAMP_XP_PER_NEW_MEMBER);
+                            }
+
                             // Recalculate max movement for the merged army
                             const allUnitsInMergedArmy = stationaryArmy.unitIds.map(id => newGs.units.get(id)!);
                             stationaryArmy.maxMovementPoints = Math.min(...allUnitsInMergedArmy.map(u => UNIT_DEFINITIONS[u.type].movement));
@@ -817,21 +852,36 @@ const App: React.FC = () => {
 
                 // 3. REGULAR MOVE
                 playSound('move');
-                const startHexKey = axialToString(selectedArmy.position);
                 setGameState(prevGs => {
                     if (!prevGs) return null;
                     const newGs = { ...prevGs, hexes: new Map(prevGs.hexes), armies: new Map(prevGs.armies) };
                     
-                    const startHex = { ...newGs.hexes.get(startHexKey)! };
+                    const armyToMove = newGs.armies.get(selectedArmy.id)!;
+                    
+                    const startHex = { ...newGs.hexes.get(axialToString(armyToMove.position))! };
                     delete startHex.armyId;
-                    newGs.hexes.set(startHexKey, startHex);
+                    newGs.hexes.set(axialToString(armyToMove.position), startHex);
                     
                     const endHex = { ...newGs.hexes.get(clickedHexKey)! };
-                    endHex.armyId = selectedArmy.id;
+                    endHex.armyId = armyToMove.id;
                     newGs.hexes.set(clickedHexKey, endHex);
                     
-                    const moveCost = 1; // Simplified cost
-                    const newArmy = { ...selectedArmy, position: coords, movementPoints: selectedArmy.movementPoints - moveCost }; 
+                    const moveCost = pathCosts.get(clickedHexKey);
+                    let newMovementPoints;
+
+                    if (moveCost !== undefined && armyToMove.movementPoints >= moveCost) {
+                        // Normal move, possibly multi-step.
+                        newMovementPoints = armyToMove.movementPoints - moveCost;
+                    } else if (armyToMove.movementPoints > 0 && hexDistance(armyToMove.position, coords) === 1) {
+                        // This is the guaranteed first step, where cost > remaining MP.
+                        newMovementPoints = 0;
+                    } else {
+                        // Fallback: This case suggests a bug if reachableHexes is correct,
+                        // but we'll default to consuming all points to prevent exploits.
+                        newMovementPoints = 0;
+                    }
+                    
+                    const newArmy = { ...armyToMove, position: coords, movementPoints: newMovementPoints }; 
                     newGs.armies.set(selectedArmy.id, newArmy);
                     return newGs;
                 });
@@ -844,7 +894,7 @@ const App: React.FC = () => {
             selectHex(coords);
         }
 
-    }, [gameState, selectedHex, selectedArmyId, reachableHexes, attackableHexes, expandableHexes, deployableHexes, armyDeploymentInfo, campTileSelectionInfo, isAITurning, gameOverMessage, selectHex, isCityScreenOpen, isCampScreenOpen, armyFormationSource, isCultureScreenOpen, handleFinalizeCampSetup]);
+    }, [gameState, selectedHex, selectedArmyId, reachableHexes, attackableHexes, expandableHexes, deployableHexes, pathCosts, armyDeploymentInfo, campTileSelectionInfo, isAITurning, gameOverMessage, selectHex, isCityScreenOpen, isCampScreenOpen, armyFormationSource, isCultureScreenOpen, handleFinalizeCampSetup]);
 
     const handleEndTurn = useCallback((currentGs: GameState) => {
         if (isAITurning || gameOverMessage) return;
@@ -855,28 +905,8 @@ const App: React.FC = () => {
             const currentPlayerId = newGs.currentPlayerId;
             const nextPlayerId = currentPlayerId === 1 ? 2 : 1;
             const currentPlayer = newGs.players.find(p => p.id === currentPlayerId)!;
-
-            // 0. Global Resource Gathering (Wood, Stone, Hides, Obsidian)
-            for (const city of Array.from(newGs.cities.values()).filter(c => c.ownerId === currentPlayerId)) {
-                for (const tileKey of city.controlledTiles) {
-                    const hex = newGs.hexes.get(tileKey);
-                    if (!hex || hex.armyId || hex.cityId) continue; // Don't gather from occupied tiles
-
-                    currentPlayer.wood += hex.currentWood;
-                    hex.currentWood = 0;
-                    
-                    currentPlayer.stone += hex.currentStone;
-                    hex.currentStone = 0; // Depletable
-
-                    currentPlayer.hides += hex.currentHides;
-                    hex.currentHides = 0;
-                    
-                    currentPlayer.obsidian += hex.currentObsidian;
-                    hex.currentObsidian = 0; // Depletable
-                }
-            }
             
-            // Reset wasStarving flag for current player's armies
+            // 0. Reset wasStarving flag for current player's armies
             for (const hex of newGs.hexes.values()) {
                 const armyOnHex = hex.armyId ? newGs.armies.get(hex.armyId) : undefined;
                 if (armyOnHex && armyOnHex.ownerId === currentPlayerId) {
@@ -1028,80 +1058,102 @@ const App: React.FC = () => {
                 }
             }
 
-            // 4. City Production
-            for (const city of Array.from(newGs.cities.values()).filter(c => c.ownerId === currentPlayerId)) {
-                if (city.buildQueue.length > 0) {
-                    const garrisonUnits = city.garrison.map(id => newGs.units.get(id)!);
-                    const cityProduction = garrisonUnits.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].productionYield, 0);
+            // 4. City & Camp Production and Resource Gathering
+            const processContainer = (container: City | Army, units: Unit[], controlledTiles: string[]) => {
+                const totalWorkPoints = units.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].productionYield, 0);
+                const productionFocus = container.productionFocus ?? 100;
+                const resourceFocus = container.resourceFocus;
 
-                    const item = city.buildQueue[0];
-                    item.progress += cityProduction;
+                // Production
+                if (container.buildQueue && container.buildQueue.length > 0) {
+                    const productionPoints = totalWorkPoints * (productionFocus / 100);
+                    const item = container.buildQueue[0];
+                    item.progress += productionPoints;
+
                     if (item.progress >= item.productionCost) {
                         playSound('build');
                         if (item.type === 'unit') {
                             const unitDef = UNIT_DEFINITIONS[item.itemType as UnitType];
                             const newUnitId = generateId();
-                            newGs.units.set(newUnitId, { 
-                                id: newUnitId, 
-                                type: item.itemType as UnitType, 
-                                ownerId: city.ownerId, 
-                                hp: unitDef.maxHp, 
-                                foodStored: 0,
-                                gender: unitDef.gender ?? Gender.None
-                            });
-                            city.garrison.push(newUnitId);
-                        } else {
-                             city.buildings.push(item.itemType as BuildingType);
-                        }
-                        city.buildQueue.shift();
-                    }
-                }
-            }
-
-            // 5. Camp Production
-            for (const army of Array.from(newGs.armies.values()).filter(a => a.ownerId === currentPlayerId && a.isCamped)) {
-                if (army.buildQueue && army.buildQueue.length > 0) {
-                    const armyUnits = army.unitIds.map(id => newGs.units.get(id)!);
-                    const armyProduction = armyUnits.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].productionYield, 0);
-
-                    const item = army.buildQueue[0];
-                    item.progress += armyProduction;
-                    if (item.progress >= item.productionCost) {
-                        playSound('build');
-                        if (item.type === 'unit') {
-                            const unitDef = UNIT_DEFINITIONS[item.itemType as UnitType];
-                            const newUnitId = generateId();
-                            newGs.units.set(newUnitId, { 
-                                id: newUnitId, 
-                                type: item.itemType as UnitType, 
-                                ownerId: army.ownerId, 
-                                hp: unitDef.maxHp, 
-                                foodStored: 0,
-                                gender: unitDef.gender ?? Gender.None
-                            });
-                            army.unitIds.push(newUnitId);
+                            newGs.units.set(newUnitId, { id: newUnitId, type: item.itemType as UnitType, ownerId: container.ownerId, hp: unitDef.maxHp, foodStored: 0, gender: unitDef.gender ?? Gender.None });
+                            // FIX: Use a proper type guard to differentiate City and Army, allowing safe access to type-specific properties.
+                            if ('garrison' in container) { // It's a City
+                                container.garrison.push(newUnitId);
+                            } else { // It's an Army
+                                container.unitIds.push(newUnitId);
+                                if (container.isCamped) {
+                                    container.xp = (container.xp ?? 0) + item.productionCost * CAMP_XP_PER_UNIT_PROD_COST;
+                                }
+                            }
                         } else { // 'building'
-                             army.buildings!.push(item.itemType as CampBuildingType);
+                            // FIX: Use a type guard to safely push the correct building type and access army-specific properties. This resolves all three errors.
+                            if ('garrison' in container) { // It's a City
+                                container.buildings.push(item.itemType as BuildingType);
+                            } else { // It's an Army
+                                container.buildings!.push(item.itemType as CampBuildingType);
+                                if (container.isCamped) {
+                                    container.xp = (container.xp ?? 0) + item.productionCost * CAMP_XP_PER_BUILDING_PROD_COST;
+                                }
+                            }
                         }
-                        army.buildQueue.shift();
+                        container.buildQueue.shift();
                     }
                 }
+
+                // Resource Gathering
+                const gatheringPoints = totalWorkPoints * ((100 - productionFocus) / 100);
+                if (gatheringPoints > 0 && resourceFocus) {
+                    const focusedResources = Object.entries(resourceFocus).filter(([_, v]) => v).map(([k, _]) => k);
+                    if (focusedResources.length > 0) {
+                        const pointsPerResource = gatheringPoints / focusedResources.length;
+                        
+                        for (const resource of focusedResources) {
+                            let pointsLeft = pointsPerResource;
+                            const tilesWithResource = controlledTiles
+                                .map(key => newGs.hexes.get(key)!)
+                                .filter(h => h && (h as any)[`current${resource.charAt(0).toUpperCase() + resource.slice(1)}`] > 0)
+                                .sort((a, b) => (b as any)[`current${resource.charAt(0).toUpperCase() + resource.slice(1)}`] - (a as any)[`current${resource.charAt(0).toUpperCase() + resource.slice(1)}`]);
+
+                            let totalGatheredThisResource = 0;
+                            for (const hex of tilesWithResource) {
+                                if (pointsLeft <= 0) break;
+                                const resourceKey = `current${resource.charAt(0).toUpperCase() + resource.slice(1)}` as keyof Hex;
+                                const amountOnTile = hex[resourceKey] as number;
+                                const amountToGather = Math.min(pointsLeft * GATHERING_YIELD_PER_POINT, amountOnTile);
+                                
+                                if (amountToGather > 0) {
+                                    totalGatheredThisResource += amountToGather;
+                                    (hex[resourceKey] as number) -= amountToGather;
+                                    pointsLeft -= amountToGather / GATHERING_YIELD_PER_POINT;
+                                }
+                            }
+                            (currentPlayer as any)[resource] = ((currentPlayer as any)[resource] ?? 0) + Math.round(totalGatheredThisResource);
+                        }
+                    }
+                }
+            };
+
+            for (const city of Array.from(newGs.cities.values()).filter(c => c.ownerId === currentPlayerId)) {
+                const garrisonUnits = city.garrison.map(id => newGs.units.get(id)!);
+                processContainer(city, garrisonUnits, city.controlledTiles);
             }
 
-            // 6. Update City/Camp Population & Leveling
+            for (const army of Array.from(newGs.armies.values()).filter(a => a.ownerId === currentPlayerId && a.isCamped)) {
+                army.xp = (army.xp ?? 0) + CAMP_XP_PER_TURN; // Passive XP
+                const armyUnits = army.unitIds.map(id => newGs.units.get(id)!);
+                processContainer(army, armyUnits, army.controlledTiles!);
+            }
+            
+
+            // 5. Update City/Camp Population
             for (const city of Array.from(newGs.cities.values()).filter(c => c.ownerId === currentPlayerId)) {
                 city.population = city.garrison.length;
             }
-             for (const army of Array.from(newGs.armies.values()).filter(a => a.ownerId === currentPlayerId && a.isCamped)) {
+            for (const army of Array.from(newGs.armies.values()).filter(a => a.ownerId === currentPlayerId && a.isCamped)) {
                 army.population = army.unitIds.length;
-                if (army.level !== undefined && army.nextPopulationMilestone !== undefined && army.population >= army.nextPopulationMilestone) {
-                    army.level += 1;
-                    army.nextPopulationMilestone += CAMP_POPULATION_PER_LEVEL;
-                    playSound('levelUp');
-                }
             }
             
-            // 7. Reproduction and Aging
+            // 6. Reproduction and Aging
             const unitsBornThisTurn: { container: Army | City; unit: Unit }[] = [];
             // Aging
             for (const unit of Array.from(newGs.units.values()).filter(u => u.ownerId === currentPlayerId && u.type === UnitType.Child)) {
@@ -1142,16 +1194,29 @@ const App: React.FC = () => {
             for (const city of Array.from(newGs.cities.values()).filter(c => c.ownerId === currentPlayerId)) {
                 processUnitGroup(city, city.garrison);
             }
-            // Add newborns to the game state
+            // Add newborns to the game state & grant camp XP
             for (const { container, unit } of unitsBornThisTurn) {
                 newGs.units.set(unit.id, unit);
                 if ('unitIds' in container) { // It's an Army
                     container.unitIds.push(unit.id);
+                    if (container.isCamped) {
+                        container.xp = (container.xp ?? 0) + CAMP_XP_PER_NEW_MEMBER;
+                    }
                 } else { // It's a City
                     container.garrison.push(unit.id);
                 }
             }
             
+             // 7. Camp Leveling
+            for (const army of Array.from(newGs.armies.values()).filter(a => a.ownerId === currentPlayerId && a.isCamped)) {
+                if (army.xp !== undefined && army.xpToNextLevel !== undefined && army.xp >= army.xpToNextLevel) {
+                    army.level = (army.level ?? 1) + 1;
+                    army.xp -= army.xpToNextLevel;
+                    army.xpToNextLevel = Math.floor(INITIAL_XP_TO_NEXT_LEVEL * Math.pow(XP_LEVEL_MULTIPLIER, army.level - 1));
+                    playSound('levelUp');
+                }
+            }
+
             // 8. Healing & Income & Research
             currentPlayer.gold += calculateIncome(currentPlayerId, newGs);
             
@@ -1415,8 +1480,8 @@ const App: React.FC = () => {
                     const neighborHex = newGs.hexes.get(neighborKey);
 
                     if (neighborHex && !neighborHex.armyId && !neighborHex.cityId) {
-                        const terrainDef = TERRAIN_DEFINITIONS[neighborHex.terrain];
-                        if (terrainDef.movementCost < 99 && army.movementPoints >= terrainDef.movementCost) {
+                        const terrainDef = TERRAIN_DEFINITIONS[neighborHex.terrain].movementCost;
+                        if (terrainDef < 99 && army.movementPoints >= terrainDef) {
                             const dist = hexDistance(neighborPos, playerCapital.position);
                             if (dist < minDistance) {
                                 minDistance = dist;
@@ -1471,7 +1536,7 @@ const App: React.FC = () => {
                 const newArmy = { ...newGs.armies.get(armyId)! };
                 newArmy.isCamped = false;
                 newArmy.controlledTiles = [];
-                newArmy.movementPoints = newArmy.maxMovementPoints;
+                newArmy.movementPoints = 0;
                 newGs.armies.set(armyId, newArmy);
                 return newGs;
             });
@@ -1737,6 +1802,30 @@ const App: React.FC = () => {
         });
     }, []);
 
+    const handleUpdateCityFocus = useCallback((cityId: string, focus: { productionFocus: number; resourceFocus: City['resourceFocus']}) => {
+         setGameState(prev => {
+            if (!prev) return null;
+            const city = prev.cities.get(cityId);
+            if (!city) return prev;
+            const newGs = { ...prev, cities: new Map(prev.cities) };
+            const newCity = { ...city, ...focus };
+            newGs.cities.set(cityId, newCity);
+            return newGs;
+         });
+    }, []);
+    
+    const handleUpdateCampFocus = useCallback((armyId: string, focus: { productionFocus: number; resourceFocus: Army['resourceFocus']}) => {
+         setGameState(prev => {
+            if (!prev) return null;
+            const army = prev.armies.get(armyId);
+            if (!army) return prev;
+            const newGs = { ...prev, armies: new Map(prev.armies) };
+            const newArmy = { ...army, ...focus };
+            newGs.armies.set(armyId, newArmy);
+            return newGs;
+         });
+    }, []);
+
     const handleGoHome = () => {
         if (!gameState || !gameContainerRef.current) return;
         
@@ -1814,8 +1903,8 @@ const App: React.FC = () => {
                 <GameUI gameState={gameState} selectedHex={selectedHex} selectedUnitId={selectedUnitId} selectedArmyId={selectedArmyId} projectedIncome={projectedIncome} campTileSelectionInfo={campTileSelectionInfo} onEndTurn={() => handleEndTurn(gameState)} onBuyInfluenceTile={handleBuyInfluenceTile} onOpenSelectionScreen={handleOpenSelectionScreen} onOpenResearchScreen={() => setIsResearchScreenOpen(true)} onOpenCultureScreen={() => setIsCultureScreenOpen(true)} isAITurning={isAITurning} />
                 <ArmyBar gameState={gameState} selectedHex={selectedHex} selectedUnitId={selectedUnitId} selectedArmyId={selectedArmyId} onSelectUnit={handleSelectUnit} onStartFormArmy={handleStartFormArmy} onToggleCamp={handleToggleCamp} />
             </div>
-            {isCityScreenOpen && cityOnSelectedHex && <CityScreen gameState={gameState} cityId={cityOnSelectedHex.id} onClose={() => setIsCityScreenOpen(false)} onBuildBuilding={handleBuildBuilding} onProduceUnit={handleProduceUnit} />}
-            {isCampScreenOpen && selectedCampId && <CampScreen gameState={gameState} armyId={selectedCampId} onClose={() => setIsCampScreenOpen(false)} onProduceInCamp={handleProduceInCamp} onRenameArmy={handleRenameArmy} />}
+            {isCityScreenOpen && cityOnSelectedHex && <CityScreen gameState={gameState} cityId={cityOnSelectedHex.id} onClose={() => setIsCityScreenOpen(false)} onBuildBuilding={handleBuildBuilding} onProduceUnit={handleProduceUnit} onUpdateFocus={handleUpdateCityFocus} />}
+            {isCampScreenOpen && selectedCampId && <CampScreen gameState={gameState} armyId={selectedCampId} onClose={() => setIsCampScreenOpen(false)} onProduceInCamp={handleProduceInCamp} onRenameArmy={handleRenameArmy} onUpdateFocus={handleUpdateCampFocus} />}
             {armyFormationSource && <CreateArmyScreen gameState={gameState} sourceId={armyFormationSource.sourceId} sourceType={armyFormationSource.sourceType} onClose={() => setArmyFormationSource(null)} onConfirmFormation={handleConfirmArmyFormation} />}
             {isResearchScreenOpen && <ResearchScreen gameState={gameState} onClose={() => setIsResearchScreenOpen(false)} onSetResearch={handleSetCurrentResearch} />}
             {isCultureScreenOpen && <CultureScreen gameState={gameState} onClose={() => setIsCultureScreenOpen(false)} />}
