@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { GameState, UnitType, Unit, TerrainType, CampBuildingType, BuildQueueItem, Gender, Army, ResourceCost } from '../types';
 import { UNIT_DEFINITIONS, TERRAIN_DEFINITIONS, CAMP_BUILDING_DEFINITIONS, GATHERING_YIELD_PER_POINT } from '../constants';
-import { CloseIcon, ResearchIcon, PlusIcon, InfantryIcon, TankIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, PalisadeIcon, ScoutTentIcon, ForagingPostIcon, WoodIcon, StoneIcon, HidesIcon, ObsidianIcon, StoragePitIcon, ArrowDownIcon } from './Icons';
+import { CloseIcon, ResearchIcon, PlusIcon, InfantryIcon, TankIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, PalisadeIcon, ScoutTentIcon, ForagingPostIcon, WoodIcon, StoneIcon, HidesIcon, ObsidianIcon, StoragePitIcon, ArrowDownIcon, FirePitIcon, FoodIcon, DryingRackIcon } from './Icons';
 import StackedUnitCard from './StackedUnitCard';
 import { axialToString } from '../utils/hexUtils';
 
@@ -67,10 +67,12 @@ const renderQueueItemIcon = (item: BuildQueueItem) => {
         }
     } else {
         switch(item.itemType as CampBuildingType) {
+            case CampBuildingType.FirePit: return <FirePitIcon className={iconClass} />;
             case CampBuildingType.Palisade: return <PalisadeIcon className={iconClass} />;
             case CampBuildingType.ScoutTent: return <ScoutTentIcon className={iconClass} />;
             case CampBuildingType.ForagingPost: return <ForagingPostIcon className={iconClass} />;
             case CampBuildingType.StoragePit: return <StoragePitIcon className={iconClass} />;
+            case CampBuildingType.DryingRack: return <DryingRackIcon className={iconClass} />;
             default: return null;
         }
     }
@@ -79,10 +81,12 @@ const renderQueueItemIcon = (item: BuildQueueItem) => {
 const renderBuildingIcon = (buildingType: CampBuildingType) => {
     const iconClass = "w-10 h-10 text-white";
      switch(buildingType) {
+        case CampBuildingType.FirePit: return <FirePitIcon className={iconClass} />;
         case CampBuildingType.Palisade: return <PalisadeIcon className={iconClass} />;
         case CampBuildingType.ScoutTent: return <ScoutTentIcon className={iconClass} />;
         case CampBuildingType.ForagingPost: return <ForagingPostIcon className={iconClass} />;
         case CampBuildingType.StoragePit: return <StoragePitIcon className={iconClass} />;
+        case CampBuildingType.DryingRack: return <DryingRackIcon className={iconClass} />;
         default: return null;
     }
 }
@@ -268,8 +272,8 @@ const CampScreen: React.FC<CampScreenProps> = ({ gameState, armyId, onClose, onP
 
         <div className="p-6 border-b-2 flex justify-between items-center flex-shrink-0" style={{ borderColor: player?.color ?? '#4a5568' }}>
           <div>
-            <EditableArmyName army={army} onRename={(newName) => onRenameArmy(army.id, newName)} />
-            <p className="text-gray-400">Owned by {player?.name} at ({army.position.q}, {army.position.r}) on {terrainDef?.name}</p>
+            <EditableArmyName army={army} onRename={(newName: string) => onRenameArmy(army.id, newName)} />
+            <p className="text-gray-400">Founded Turn {army.foundingTurn} on {terrainDef?.name}</p>
           </div>
           <div className="text-right">
               <p className="text-2xl font-bold">Level {army.level}</p>
@@ -291,7 +295,8 @@ const CampScreen: React.FC<CampScreenProps> = ({ gameState, armyId, onClose, onP
                 )}
             </div>
              <div>
-              <h3 className="text-lg font-semibold text-gray-300 mb-1">Camp Level Progress</h3>
+              <h3 className="text-lg font-semibold text-gray-300 mb-1">Level Progress</h3>
+              <p className="text-2xl font-bold">{Math.floor(army.xp ?? 0)} / {army.xpToNextLevel}</p>
               <div className="w-full h-2.5 bg-gray-700 rounded-full overflow-hidden border border-black my-1">
                 <div className="bg-purple-500 h-full rounded-full transition-all duration-300" style={{ width: `${progressPercentage}%` }}></div>
               </div>
@@ -302,8 +307,9 @@ const CampScreen: React.FC<CampScreenProps> = ({ gameState, armyId, onClose, onP
                 <div className="w-full h-2.5 bg-gray-700 rounded-full overflow-hidden border border-black my-1">
                     <div className="bg-yellow-500 h-full rounded-full" style={{ width: `${(totalStoredResources / army.storageCapacity) * 100}%`}}></div>
                 </div>
-                <p className="text-right text-xs">{totalStoredResources} / {army.storageCapacity}</p>
+                <p className="text-right text-xs">{totalStoredResources} / {army.storageCapacity} (Goods)</p>
                  <div className="grid grid-cols-2 text-sm gap-x-4 gap-y-1 mt-2">
+                    <p className="flex items-center gap-1.5 col-span-2"><FoodIcon className="w-4 h-4 text-green-300" /> Food: <span className="font-semibold">{army.food ?? 0} / {army.foodStorageCapacity ?? 0}</span></p>
                     <p className="flex items-center gap-1.5"><WoodIcon className="w-4 h-4 text-yellow-700" /> Wood: <span className="font-semibold">{army.localResources.wood ?? 0}</span></p>
                     <p className="flex items-center gap-1.5"><StoneIcon className="w-4 h-4 text-gray-400" /> Stone: <span className="font-semibold">{army.localResources.stone ?? 0}</span></p>
                     <p className="flex items-center gap-1.5"><HidesIcon className="w-4 h-4 text-orange-400" /> Hides: <span className="font-semibold">{army.localResources.hides ?? 0}</span></p>
@@ -313,7 +319,7 @@ const CampScreen: React.FC<CampScreenProps> = ({ gameState, armyId, onClose, onP
                     {isStorageManagerOpen ? 'Hide' : 'Manage Storage'}
                  </button>
             </div>
-             {isStorageManagerOpen && (
+            {isStorageManagerOpen && (
                 <div className="bg-gray-900/50 p-2 rounded-lg space-y-2">
                     {Object.keys(army.localResources).map(resStr => {
                         const res = resStr as keyof ResourceCost;
@@ -328,19 +334,14 @@ const CampScreen: React.FC<CampScreenProps> = ({ gameState, armyId, onClose, onP
                     })}
                 </div>
             )}
-            <div>
-              <h3 className="text-lg font-semibold text-gray-300 mb-1">Research Yield</h3>
-              <p className="flex items-center gap-2"><ResearchIcon className="w-5 h-5 text-cyan-300"/> <span className="font-bold">{garrisonedUnits.reduce((sum, u) => sum + (UNIT_DEFINITIONS[u.type].researchYield ?? 0), 0)}</span> RP / turn</p>
-            </div>
-
           </div>
           
           {/* Middle Column: Buildings & Workforce */}
           <div className="md:col-span-1">
-             <h3 className="text-lg font-semibold text-gray-300 mb-2">Buildings ({(army.buildings ?? []).length} / {army.level})</h3>
+             <h3 className="text-lg font-semibold text-gray-300 mb-2">Buildings ({army.buildings?.length ?? 0} / {army.level})</h3>
              <div className="grid grid-cols-2 gap-2">
                 {Array.from({ length: army.level }).map((_, index) => {
-                    const buildingType = (army.buildings ?? [])[index];
+                    const buildingType = army.buildings?.[index];
                     if (buildingType) {
                         const def = CAMP_BUILDING_DEFINITIONS[buildingType];
                         return (
@@ -350,9 +351,9 @@ const CampScreen: React.FC<CampScreenProps> = ({ gameState, armyId, onClose, onP
                             </div>
                         )
                     }
-                    const isSlotQueued = (army.buildQueue ?? []).some(item => item.type === 'building');
-                    if (isCurrentPlayerCamp && !isSlotQueued && (army.buildings ?? []).length < army.level && index === (army.buildings ?? []).length) {
-                         return <div key={index} className="bg-gray-900/50 p-2 rounded-lg flex items-center justify-center h-24"><p className="text-gray-500 text-sm">Choose in Production</p></div>
+                    const isSlotQueued = army.buildQueue?.some(item => item.type === 'building');
+                    if (isCurrentPlayerCamp && !isSlotQueued && (army.buildings?.length ?? 0) < army.level && index === (army.buildings?.length ?? 0)) {
+                         return <div key={index} className="bg-gray-900/50 p-2 rounded-lg flex items-center justify-center h-24 text-gray-500 italic">Empty Slot</div>
                     }
                     return <div key={index} className="bg-gray-900/80 rounded-lg h-24"></div>
                 })}
@@ -394,14 +395,15 @@ const CampScreen: React.FC<CampScreenProps> = ({ gameState, armyId, onClose, onP
           
           {/* Right Column: Production Queue */}
             <div className="md:col-span-1">
-                <h3 className="text-lg font-semibold text-gray-300 mb-2">Production Queue ({(army.buildQueue ?? []).length})</h3>
+                <h3 className="text-lg font-semibold text-gray-300 mb-2">Production Queue ({army.buildQueue?.length ?? 0})</h3>
                 <p className="text-sm text-gray-400 mb-2">Production Points: <span className="font-bold text-blue-400">{Math.round(productionPoints)}</span> / turn</p>
                 <div className="bg-gray-900/50 p-3 rounded-lg flex-grow flex flex-col">
                     <div className="space-y-3 overflow-y-auto flex-grow mb-4">
-                        {(army.buildQueue ?? []).length > 0 ? (
-                            (army.buildQueue ?? []).map(item => {
-                                const def = item.type === 'unit' ? UNIT_DEFINITIONS[item.itemType as UnitType] : CAMP_BUILDING_DEFINITIONS[item.itemType as CampBuildingType];
-                                const name = item.itemType;
+                        {(army.buildQueue?.length ?? 0) > 0 ? (
+                            army.buildQueue!.map(item => {
+                                const name = item.type === 'unit' 
+                                    ? item.itemType 
+                                    : CAMP_BUILDING_DEFINITIONS[item.itemType as CampBuildingType].name;
                                 const progressPercentage = (item.progress / item.productionCost) * 100;
                                 const turnsLeft = productionPoints > 0 ? Math.ceil((item.productionCost - item.progress) / productionPoints) : '∞';
 

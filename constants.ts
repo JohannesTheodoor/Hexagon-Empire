@@ -37,6 +37,16 @@ export const INCOME_PER_INFLUENCE_LEVEL = 2; // Gold per controlled tile beyond 
 export const UNIT_HEAL_AMOUNT = 2; // HP healed per turn in friendly influence
 export const STARVATION_DAMAGE = 1;
 
+// Disease Constants
+export const DISEASE_RISK_BASE: Record<'Low' | 'Medium' | 'High', number> = {
+  Low: 5,
+  Medium: 10,
+  High: 20,
+};
+export const DISEASE_RISK_INCREASE_PER_TURN = 5;
+export const DISEASE_RISK_DECREASE_PER_TURN = 2;
+export const DISEASE_DAMAGE = 1;
+
 export const TERRAIN_DEFINITIONS: Record<TerrainType, TerrainDefinition> = {
   [TerrainType.Plains]: { name: 'Plains', color: '#8db152', movementCost: 1, defenseBonus: 0, maxFood: 50, foodRegrowth: 11, maxWood: 8, woodRegrowth: 1, maxStone: 8, maxHides: 6, hidesRegrowth: 1, maxObsidian: 0, diseaseRisk: 'Low' },
   [TerrainType.Forest]: { name: 'Forest', color: '#4a784a', movementCost: 2, defenseBonus: 2, maxFood: 35, foodRegrowth: 6, maxWood: 18, woodRegrowth: 1, maxStone: 0, maxHides: 5, hidesRegrowth: 1, maxObsidian: 0, diseaseRisk: 'Medium' },
@@ -94,10 +104,12 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
 };
 
 export const CAMP_BUILDING_DEFINITIONS: Record<CampBuildingType, CampBuildingDefinition> = {
+    [CampBuildingType.FirePit]: { name: 'Fire Pit', description: '+1 Research, +1 Culture point per turn. Enhances healing if food is available.', cost: { wood: 5, stone: 1 }, productionCost: 10, researchBonus: 1, culturePointBonus: 1, requiredTech: 'fire_mastery' },
     [CampBuildingType.Palisade]: { name: 'Palisade', description: '+2 Defense bonus for the camp.', cost: { wood: 50 }, productionCost: 500, defenseBonus: 2 },
     [CampBuildingType.ScoutTent]: { name: 'Scout Tent', description: '+1 Vision range for the camp.', cost: { wood: 10, hides: 30 }, productionCost: 400, visionBonus: 1 },
     [CampBuildingType.ForagingPost]: { name: 'Foraging Post', description: '+5 Food gathering per turn from this tile.', cost: { wood: 60 }, productionCost: 600, foodGatherBonus: 5 },
-    [CampBuildingType.StoragePit]: { name: 'Storage Pit', description: '+100 resource storage capacity.', cost: { wood: 40 }, productionCost: 300, storageBonus: 100 },
+    [CampBuildingType.StoragePit]: { name: 'Storage Pit', description: '+50 resource storage capacity.', cost: { wood: 10, stone: 5, hides: 2 }, productionCost: 15, storageBonus: 50, requiredTech: 'simple_storage' },
+    [CampBuildingType.DryingRack]: { name: 'Drying Rack', description: 'Increases camp food storage by 10.', cost: { wood: 8 }, productionCost: 18, foodStorageBonus: 10, requiredTech: 'simple_storage' },
 };
 
 export const axialDirections: {q: number, r: number}[] = [

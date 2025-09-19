@@ -1,7 +1,7 @@
 
 import React, { useRef, useLayoutEffect, useState, useMemo } from 'react';
 import { GameState, Technology } from '../types';
-import { CloseIcon, ResearchIcon, FoodIcon, MiningIcon, BuildingIcon, ForgingIcon, FishingIcon, SailingIcon, MountaineeringIcon } from './Icons';
+import { CloseIcon, ResearchIcon, FoodIcon, MiningIcon, BuildingIcon, ForgingIcon, FishingIcon, SailingIcon, MountaineeringIcon, FireMasteryIcon, SimpleStorageIcon } from './Icons';
 import { TECH_TREE } from '../techtree';
 
 interface ResearchScreenProps {
@@ -12,6 +12,8 @@ interface ResearchScreenProps {
 
 const TechIcon: React.FC<{ techId: string; className?: string }> = ({ techId, className }) => {
     switch(techId) {
+        case 'fire_mastery': return <FireMasteryIcon className={className} />;
+        case 'simple_storage': return <SimpleStorageIcon className={className} />;
         case 'agriculture': return <FoodIcon className={className} />;
         case 'mining': return <MiningIcon className={className} />;
         case 'construction': return <BuildingIcon className={className} />;

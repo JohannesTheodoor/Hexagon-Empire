@@ -79,6 +79,8 @@ export enum CampBuildingType {
     ScoutTent = 'Scout Tent',
     ForagingPost = 'Foraging Post',
     StoragePit = 'Storage Pit',
+    FirePit = 'Fire Pit',
+    DryingRack = 'Drying Rack',
 }
 
 export interface BuildingDefinition {
@@ -102,6 +104,9 @@ export interface CampBuildingDefinition {
     visionBonus?: number;
     foodGatherBonus?: number;
     storageBonus?: number;
+    foodStorageBonus?: number;
+    researchBonus?: number;
+    culturePointBonus?: number;
     requiredTech?: string;
 }
 
@@ -128,6 +133,7 @@ export interface Hex extends AxialCoords {
   currentHides: number;
   currentObsidian: number;
   wasStarving?: boolean;
+  currentDiseaseRisk: number;
 }
 
 export interface Unit {
@@ -168,6 +174,8 @@ export interface Army {
   };
   localResources: ResourceCost;
   storageCapacity: number;
+  food?: number;
+  foodStorageCapacity?: number;
 }
 
 export interface City {
@@ -212,6 +220,7 @@ export interface Player {
   color: string;
   gold: number;
   researchPoints: number; // Unassigned research points
+  culturePoints: number;
   unlockedTechs: string[];
   currentResearchId: string | null; // The ID of the tech currently being researched
   researchProgress: number; // How many points have been invested in the current research

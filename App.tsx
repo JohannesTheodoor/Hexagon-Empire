@@ -12,7 +12,7 @@ import CreateArmyScreen from './components/CreateArmyScreen';
 import StartScreen from './components/StartScreen';
 // FIX: Import UnitDefinition to resolve 'Cannot find name' error.
 import { GameState, AxialCoords, Hex, TerrainType, Unit, UnitType, City, Player, UnitSize, BuildingType, BuildQueueItem, TechEffectType, Army, ArmyDeploymentInfo, Gender, CampBuildingType, UnitDefinition, ResourceCost } from './types';
-import { MAP_SIZES, MAP_WIDTH, MAP_HEIGHT, TERRAIN_DEFINITIONS, UNIT_DEFINITIONS, axialDirections, CITY_HP, UNIT_VISION_RANGE, CITY_VISION_RANGE, BUY_INFLUENCE_TILE_COST, BASE_CITY_INCOME, INCOME_PER_INFLUENCE_LEVEL, UNIT_HEAL_AMOUNT, INITIAL_CITY_POPULATION, BUILDING_DEFINITIONS, STARVATION_DAMAGE, CAMP_DEFENSE_BONUS, BASE_CITY_FOOD_STORAGE, CAMP_INFLUENCE_RANGE, CAMP_VISION_RANGE, CAMP_BUILDING_DEFINITIONS, CAMP_XP_PER_TURN, CAMP_XP_PER_BUILDING_PROD_COST, CAMP_XP_PER_UNIT_PROD_COST, CAMP_XP_PER_NEW_MEMBER, INITIAL_XP_TO_NEXT_LEVEL, XP_LEVEL_MULTIPLIER, GATHERING_YIELD_PER_POINT } from './constants';
+import { MAP_SIZES, MAP_WIDTH, MAP_HEIGHT, TERRAIN_DEFINITIONS, UNIT_DEFINITIONS, axialDirections, CITY_HP, UNIT_VISION_RANGE, CITY_VISION_RANGE, BUY_INFLUENCE_TILE_COST, BASE_CITY_INCOME, INCOME_PER_INFLUENCE_LEVEL, UNIT_HEAL_AMOUNT, INITIAL_CITY_POPULATION, BUILDING_DEFINITIONS, STARVATION_DAMAGE, CAMP_DEFENSE_BONUS, BASE_CITY_FOOD_STORAGE, CAMP_INFLUENCE_RANGE, CAMP_VISION_RANGE, CAMP_BUILDING_DEFINITIONS, CAMP_XP_PER_TURN, CAMP_XP_PER_BUILDING_PROD_COST, CAMP_XP_PER_UNIT_PROD_COST, CAMP_XP_PER_NEW_MEMBER, INITIAL_XP_TO_NEXT_LEVEL, XP_LEVEL_MULTIPLIER, GATHERING_YIELD_PER_POINT, DISEASE_RISK_BASE, DISEASE_RISK_INCREASE_PER_TURN, DISEASE_RISK_DECREASE_PER_TURN, DISEASE_DAMAGE } from './constants';
 import { axialToString, stringToAxial, getHexesInRange, hexDistance, axialToPixel } from './utils/hexUtils';
 import { playSound, setVolume, setMuted, ensureAudioInitialized } from './utils/soundManager';
 import { TECH_TREE } from './techtree';
@@ -302,7 +302,7 @@ const App: React.FC = () => {
                     terrainType = TerrainType.Mountains;
                 }
                 
-                const hex: Hex = { q, r, terrain: terrainType, currentFood: 0, currentWood: 0, currentStone: 0, currentHides: 0, currentObsidian: 0 };
+                const hex: Hex = { q, r, terrain: terrainType, currentFood: 0, currentWood: 0, currentStone: 0, currentHides: 0, currentObsidian: 0, currentDiseaseRisk: 0 };
                 hexes.set(axialToString({ q, r }), hex);
             }
         }
@@ -446,6 +446,7 @@ const App: React.FC = () => {
             hex.currentStone = terrainDef.maxStone;
             hex.currentHides = terrainDef.maxHides;
             hex.currentObsidian = terrainDef.maxObsidian;
+            hex.currentDiseaseRisk = DISEASE_RISK_BASE[terrainDef.diseaseRisk];
         }
         
         return hexes;
@@ -475,8 +476,8 @@ const App: React.FC = () => {
         };
 
         const players: Player[] = [
-            { id: 1, name: 'Player 1', color: '#3b82f6', gold: 50, researchPoints: 0, unlockedTechs: [], currentResearchId: null, researchProgress: 0, culture: { nomadism: 0, genderRoles: 0, militarism: 0, unlockedAspects: [] }, actionsThisTurn: { attacks: 0 } },
-            { id: 2, name: 'AI Opponent', color: '#ef4444', gold: 50, researchPoints: 0, unlockedTechs: [], currentResearchId: null, researchProgress: 0, culture: { nomadism: 0, genderRoles: 0, militarism: 0, unlockedAspects: [] }, actionsThisTurn: { attacks: 0 } },
+            { id: 1, name: 'Player 1', color: '#3b82f6', gold: 50, researchPoints: 0, culturePoints: 0, unlockedTechs: [], currentResearchId: 'fire_mastery', researchProgress: 0, culture: { nomadism: 0, genderRoles: 0, militarism: 0, unlockedAspects: [] }, actionsThisTurn: { attacks: 0 } },
+            { id: 2, name: 'AI Opponent', color: '#ef4444', gold: 50, researchPoints: 0, culturePoints: 0, unlockedTechs: [], currentResearchId: 'fire_mastery', researchProgress: 0, culture: { nomadism: 0, genderRoles: 0, militarism: 0, unlockedAspects: [] }, actionsThisTurn: { attacks: 0 } },
         ];
         
         const units = new Map<string, Unit>();
@@ -823,6 +824,8 @@ const App: React.FC = () => {
                 newArmy.resourceFocus = { wood: false, stone: false, hides: false, obsidian: false };
                 newArmy.localResources = { wood: 0, stone: 0, hides: 0, obsidian: 0 };
                 newArmy.storageCapacity = 0; // Will be calculated on turn end
+                newArmy.food = 0;
+                newArmy.foodStorageCapacity = 0;
             }
     
             newGs.armies.set(armyId, newArmy);
@@ -1132,8 +1135,10 @@ const App: React.FC = () => {
                 if (army.ownerId === currentPlayerId && army.isCamped) {
                     const armyUnits = army.unitIds.map(id => newGs.units.get(id)!);
                     army.storageCapacity = armyUnits.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].carryCapacity, 0);
+                    army.foodStorageCapacity = 0;
                     army.buildings?.forEach(b => {
                         army.storageCapacity += CAMP_BUILDING_DEFINITIONS[b].storageBonus ?? 0;
+                        army.foodStorageCapacity! += CAMP_BUILDING_DEFINITIONS[b].foodStorageBonus ?? 0;
                     });
                 }
             }
@@ -1153,7 +1158,7 @@ const App: React.FC = () => {
 
                 const unitsInArmy = army.unitIds.map(id => newGs.units.get(id)!);
                 const totalConsumption = unitsInArmy.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].foodConsumption, 0);
-                const totalFoodStored = unitsInArmy.reduce((sum, u) => sum + u.foodStored, 0);
+                const totalFoodStored = unitsInArmy.reduce((sum, u) => sum + u.foodStored, 0) + (army.food ?? 0);
                 
                 let totalGatherRate = unitsInArmy.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].foodGatherRate, 0);
                 if (army.isCamped && army.buildings?.includes(CampBuildingType.ForagingPost)) {
@@ -1180,9 +1185,9 @@ const App: React.FC = () => {
                 const unitsInArmy = army.unitIds.map(id => newGs.units.get(id)!);
                 if (unitsInArmy.length === 0) continue;
 
-                // Step 1: Pool resources
-                let foodPool = unitsInArmy.reduce((sum, u) => sum + u.foodStored, 0);
-                const totalFoodCarryCapacity = unitsInArmy.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].foodCarryCapacity, 0);
+                // Step 1: Pool resources from units and camp
+                let foodPool = unitsInArmy.reduce((sum, u) => sum + u.foodStored, 0) + (army.food ?? 0);
+                
                 let totalGatherRate = unitsInArmy.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].foodGatherRate, 0);
                 if (army.isCamped && army.buildings?.includes(CampBuildingType.ForagingPost)) {
                     totalGatherRate += CAMP_BUILDING_DEFINITIONS[CampBuildingType.ForagingPost].foodGatherBonus!;
@@ -1223,15 +1228,14 @@ const App: React.FC = () => {
                     foodPool = 0;
                 }
 
-                // Step 4: Redistribute food back to units, respecting total capacity
-                foodPool = Math.min(foodPool, totalFoodCarryCapacity);
-
+                // Step 4: Redistribute food back to units and camp
                 // Clear all stored food first
                 for (const unit of unitsInArmy) {
                     unit.foodStored = 0;
                 }
+                army.food = 0;
 
-                // Redistribute remaining food, prioritizing units with larger capacity
+                // Fill units first, prioritizing units with larger capacity
                 const sortedUnits = [...unitsInArmy].sort((a, b) => UNIT_DEFINITIONS[b.type].foodCarryCapacity - UNIT_DEFINITIONS[a.type].foodCarryCapacity);
                 for (const unit of sortedUnits) {
                     if (foodPool <= 0) break;
@@ -1239,6 +1243,13 @@ const App: React.FC = () => {
                     const amountToStore = Math.min(foodPool, unitDef.foodCarryCapacity);
                     unit.foodStored = amountToStore;
                     foodPool -= amountToStore;
+                }
+
+                // Store remainder in camp storage
+                if (foodPool > 0 && army.isCamped && army.foodStorageCapacity && army.foodStorageCapacity > 0) {
+                    const amountToStoreInCamp = Math.min(foodPool, army.foodStorageCapacity);
+                    army.food = amountToStoreInCamp;
+                    foodPool -= amountToStoreInCamp;
                 }
             }
             
@@ -1456,11 +1467,40 @@ const App: React.FC = () => {
                 }
             }
 
+            // 7.5 Disease Processing
+            const sickUnitIds = new Set<string>();
+            for (const hex of newGs.hexes.values()) {
+                const terrainDef = TERRAIN_DEFINITIONS[hex.terrain];
+                const baseRisk = DISEASE_RISK_BASE[terrainDef.diseaseRisk];
+                
+                const armyOnHex = hex.armyId ? newGs.armies.get(hex.armyId) : undefined;
+                
+                if (armyOnHex && armyOnHex.ownerId === currentPlayerId) {
+                    // Army is on the tile, increase risk and check for sickness
+                    hex.currentDiseaseRisk = Math.min(100, hex.currentDiseaseRisk + DISEASE_RISK_INCREASE_PER_TURN);
+                    
+                    const unitsInArmy = armyOnHex.unitIds.map(id => newGs.units.get(id)!);
+                    for (const unit of unitsInArmy) {
+                        if (Math.random() * 100 < hex.currentDiseaseRisk) {
+                            // Unit gets sick
+                            unit.hp -= DISEASE_DAMAGE;
+                            sickUnitIds.add(unit.id);
+                        }
+                    }
+                } else {
+                    // Tile is empty (or occupied by enemy of current player), risk decays
+                    if (hex.currentDiseaseRisk > baseRisk) {
+                        hex.currentDiseaseRisk = Math.max(baseRisk, hex.currentDiseaseRisk - DISEASE_RISK_DECREASE_PER_TURN);
+                    }
+                }
+            }
+
             // 8. Healing & Income & Research
             currentPlayer.gold += calculateIncome(currentPlayerId, newGs);
             
-            // Research Points
+            // Research & Culture Points
             let totalResearchYield = 0;
+            let totalCultureYield = 0;
             for (const city of Array.from(newGs.cities.values()).filter(c => c.ownerId === currentPlayerId)) {
                 const garrisonUnits = city.garrison.map(id => newGs.units.get(id)!);
                 totalResearchYield += garrisonUnits.reduce((sum, u) => sum + (UNIT_DEFINITIONS[u.type].researchYield ?? 0), 0);
@@ -1468,11 +1508,21 @@ const App: React.FC = () => {
             for (const army of Array.from(newGs.armies.values()).filter(a => a.ownerId === currentPlayerId)) {
                 const armyUnits = army.unitIds.map(id => newGs.units.get(id)!);
                 totalResearchYield += armyUnits.reduce((sum, u) => sum + (UNIT_DEFINITIONS[u.type].researchYield ?? 0), 0);
+                 if (army.isCamped && army.buildings) {
+                    if (army.buildings.includes(CampBuildingType.FirePit)) {
+                        totalResearchYield += CAMP_BUILDING_DEFINITIONS[CampBuildingType.FirePit].researchBonus ?? 0;
+                        totalCultureYield += CAMP_BUILDING_DEFINITIONS[CampBuildingType.FirePit].culturePointBonus ?? 0;
+                    }
+                }
             }
 
             if (currentPlayer.currentResearchId) {
                 const tech = TECH_TREE[currentPlayer.currentResearchId];
                 currentPlayer.researchProgress += totalResearchYield;
+                // Special case for Fire Mastery: completes in one turn
+                if (currentPlayer.currentResearchId === 'fire_mastery') {
+                    currentPlayer.researchProgress = tech.cost;
+                }
                 if (currentPlayer.researchProgress >= tech.cost) {
                     playSound('research');
                     currentPlayer.unlockedTechs.push(currentPlayer.currentResearchId);
@@ -1484,6 +1534,7 @@ const App: React.FC = () => {
             } else {
                 currentPlayer.researchPoints += totalResearchYield;
             }
+            currentPlayer.culturePoints += totalCultureYield;
             
             // Healing Logic
             const friendlyTiles = new Set<string>();
@@ -1494,14 +1545,40 @@ const App: React.FC = () => {
                 army.controlledTiles.forEach(tileKey => friendlyTiles.add(tileKey));
             }
 
+            for (const army of Array.from(newGs.armies.values()).filter(a => a.ownerId === currentPlayerId)) {
+                if (friendlyTiles.has(axialToString(army.position))) {
+                    const unitsInArmy = army.unitIds.map(id => newGs.units.get(id)!);
+                    const shamanBonus = unitsInArmy.reduce((sum, u) => sum + (UNIT_DEFINITIONS[u.type].healingBonus ?? 0), 0);
+                    
+                    let firePitBonus = 0;
+                    if (army.isCamped && army.buildings?.includes(CampBuildingType.FirePit)) {
+                        const foodAfterConsumption = unitsInArmy.reduce((sum, u) => sum + u.foodStored, 0);
+                        if (foodAfterConsumption > 0) {
+                            firePitBonus = 1;
+                        }
+                    }
+
+                    const baseHealAmount = 1;
+                    const totalHealAmount = baseHealAmount + shamanBonus + firePitBonus;
+
+                    for (const unit of unitsInArmy) {
+                        if (!starvedUnitIds.has(unit.id) && !sickUnitIds.has(unit.id)) {
+                            const unitDef = UNIT_DEFINITIONS[unit.type];
+                            if (unit.hp > 0 && unit.hp < unitDef.maxHp) {
+                                unit.hp = Math.min(unitDef.maxHp, unit.hp + totalHealAmount);
+                            }
+                        }
+                    }
+                }
+            }
+            
             const processHealingForGroup = (unitIds: string[]) => {
                 const unitsInGroup = unitIds.map(id => newGs.units.get(id)!);
                 const healingBonus = unitsInGroup.reduce((sum, u) => sum + (UNIT_DEFINITIONS[u.type].healingBonus ?? 0), 0);
                 const baseHealAmount = 1;
                 const totalHealAmount = baseHealAmount + healingBonus;
-
                 for (const unit of unitsInGroup) {
-                    if (unit.ownerId === currentPlayerId && !starvedUnitIds.has(unit.id)) {
+                    if (unit.ownerId === currentPlayerId && !starvedUnitIds.has(unit.id) && !sickUnitIds.has(unit.id)) {
                         const unitDef = UNIT_DEFINITIONS[unit.type];
                         if (unit.hp > 0 && unit.hp < unitDef.maxHp) {
                             unit.hp = Math.min(unitDef.maxHp, unit.hp + totalHealAmount);
@@ -1509,16 +1586,47 @@ const App: React.FC = () => {
                     }
                 }
             };
-
-            for (const army of Array.from(newGs.armies.values()).filter(a => a.ownerId === currentPlayerId)) {
-                if (friendlyTiles.has(axialToString(army.position))) {
-                    processHealingForGroup(army.unitIds);
-                }
-            }
             for (const city of Array.from(newGs.cities.values()).filter(c => c.ownerId === currentPlayerId)) {
                 processHealingForGroup(city.garrison);
             }
             
+            // 8.5. Remove Dead Units
+            const deadUnitIds = new Set<string>();
+            // Find all dead units for the current player
+            newGs.units.forEach(unit => {
+                if (unit.ownerId === currentPlayerId && unit.hp <= 0) {
+                    deadUnitIds.add(unit.id);
+                }
+            });
+
+            if (deadUnitIds.size > 0) {
+                // Remove from armies and delete empty armies
+                newGs.armies.forEach((army, armyId) => {
+                    if (army.ownerId === currentPlayerId) {
+                        const originalUnitCount = army.unitIds.length;
+                        army.unitIds = army.unitIds.filter(id => !deadUnitIds.has(id));
+                        if (army.unitIds.length < originalUnitCount && army.unitIds.length === 0) {
+                            // Army is now empty, remove it
+                            const armyHex = newGs.hexes.get(axialToString(army.position));
+                            if (armyHex) {
+                                delete armyHex.armyId;
+                            }
+                            newGs.armies.delete(armyId);
+                        }
+                    }
+                });
+
+                // Remove from city garrisons
+                newGs.cities.forEach(city => {
+                    if (city.ownerId === currentPlayerId) {
+                        city.garrison = city.garrison.filter(id => !deadUnitIds.has(id));
+                    }
+                });
+
+                // Remove from global unit map
+                deadUnitIds.forEach(id => newGs.units.delete(id));
+            }
+
             // 9. CULTURAL SHIFTS
             const playerToUpdate = currentPlayer;
             
@@ -1790,6 +1898,7 @@ const App: React.FC = () => {
                 newArmy.isCamped = false;
                 newArmy.controlledTiles = [];
                 newArmy.movementPoints = 0;
+                newArmy.food = 0;
                 newGs.armies.set(armyId, newArmy);
                 return newGs;
             });
