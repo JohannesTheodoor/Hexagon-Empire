@@ -1,7 +1,7 @@
 import React from 'react';
 import Hexagon from './Hexagon';
 import { GameState, AxialCoords, Hex, Unit, City, Army } from '../types';
-import { HEX_SIZE, MAP_WIDTH, MAP_HEIGHT } from '../constants';
+import { HEX_SIZE } from '../constants';
 import { axialToString } from '../utils/hexUtils';
 
 interface GameBoardProps {
@@ -22,8 +22,8 @@ interface GameBoardProps {
 }
 
 const GameBoard: React.FC<GameBoardProps> = ({ gameState, fogOfWarEnabled, visibleHexes, exploredHexes, selectedHex, reachableHexes, attackableHexes, expandableHexes, deployableHexes, campSelectableHexes, campSelectedHexes, influenceMap, onHexClick, viewState }) => {
-  const boardWidth = HEX_SIZE * 3 / 2 * MAP_WIDTH + HEX_SIZE / 2;
-  const boardHeight = HEX_SIZE * Math.sqrt(3) * MAP_HEIGHT;
+  const boardWidth = HEX_SIZE * 3 / 2 * gameState.mapWidth + HEX_SIZE / 2;
+  const boardHeight = HEX_SIZE * Math.sqrt(3) * gameState.mapHeight;
 
   const getPlayerForHex = (army?: Army, city?: City) => {
     const ownerId = army?.ownerId ?? city?.ownerId;

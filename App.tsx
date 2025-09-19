@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import GameBoard from './components/GameBoard';
 import GameUI from './components/GameUI';
@@ -9,15 +10,19 @@ import ArmyBar from './components/ArmyBar';
 import ResearchScreen from './components/ResearchScreen';
 import CultureScreen from './components/CultureScreen';
 import CreateArmyScreen from './components/CreateArmyScreen';
+import StartScreen from './components/StartScreen';
 // FIX: Import UnitDefinition to resolve 'Cannot find name' error.
 import { GameState, AxialCoords, Hex, TerrainType, Unit, UnitType, City, Player, UnitSize, BuildingType, BuildQueueItem, TechEffectType, Army, ArmyDeploymentInfo, Gender, CampBuildingType, UnitDefinition } from './types';
-import { MAP_WIDTH, MAP_HEIGHT, TERRAIN_DEFINITIONS, UNIT_DEFINITIONS, axialDirections, CITY_HP, UNIT_VISION_RANGE, CITY_VISION_RANGE, BUY_INFLUENCE_TILE_COST, BASE_CITY_INCOME, INCOME_PER_INFLUENCE_LEVEL, UNIT_HEAL_AMOUNT, INITIAL_CITY_POPULATION, BUILDING_DEFINITIONS, STARVATION_DAMAGE, CAMP_DEFENSE_BONUS, BASE_CITY_FOOD_STORAGE, CAMP_INFLUENCE_RANGE, CAMP_VISION_RANGE, CAMP_BUILDING_DEFINITIONS, CAMP_XP_PER_TURN, CAMP_XP_PER_BUILDING_PROD_COST, CAMP_XP_PER_UNIT_PROD_COST, CAMP_XP_PER_NEW_MEMBER, INITIAL_XP_TO_NEXT_LEVEL, XP_LEVEL_MULTIPLIER, GATHERING_YIELD_PER_POINT } from './constants';
+import { MAP_SIZES, MAP_WIDTH, MAP_HEIGHT, TERRAIN_DEFINITIONS, UNIT_DEFINITIONS, axialDirections, CITY_HP, UNIT_VISION_RANGE, CITY_VISION_RANGE, BUY_INFLUENCE_TILE_COST, BASE_CITY_INCOME, INCOME_PER_INFLUENCE_LEVEL, UNIT_HEAL_AMOUNT, INITIAL_CITY_POPULATION, BUILDING_DEFINITIONS, STARVATION_DAMAGE, CAMP_DEFENSE_BONUS, BASE_CITY_FOOD_STORAGE, CAMP_INFLUENCE_RANGE, CAMP_VISION_RANGE, CAMP_BUILDING_DEFINITIONS, CAMP_XP_PER_TURN, CAMP_XP_PER_BUILDING_PROD_COST, CAMP_XP_PER_UNIT_PROD_COST, CAMP_XP_PER_NEW_MEMBER, INITIAL_XP_TO_NEXT_LEVEL, XP_LEVEL_MULTIPLIER, GATHERING_YIELD_PER_POINT } from './constants';
 import { axialToString, stringToAxial, getHexesInRange, hexDistance, axialToPixel } from './utils/hexUtils';
 import { playSound, setVolume, setMuted, ensureAudioInitialized } from './utils/soundManager';
 import { TECH_TREE } from './techtree';
 import { CULTURAL_ASPECTS } from './culture';
+import { Noise } from './utils/noise';
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
+
+type WorldSize = 'small' | 'medium' | 'large';
 
 // A simple priority queue for pathfinding (A* or Dijkstra)
 class PriorityQueue<T> {
@@ -93,6 +98,7 @@ const deepCloneGameState = (gs: GameState): GameState => {
 
 const App: React.FC = () => {
     const [gameState, setGameState] = useState<GameState | null>(null);
+    const [gameStarted, setGameStarted] = useState<boolean>(false);
     const [selectedHex, setSelectedHex] = useState<AxialCoords | null>(null);
     const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
     const [selectedArmyId, setSelectedArmyId] = useState<string | null>(null);
@@ -248,40 +254,227 @@ const App: React.FC = () => {
         return () => window.removeEventListener('mousemove', handleGlobalMouseMove);
     }, [handleGlobalMouseMove]);
 
-    const generateMap = (): Map<string, Hex> => {
+    const generateMap = (width: number, height: number): Map<string, Hex> => {
         const hexes = new Map<string, Hex>();
-        for (let q = 0; q < MAP_WIDTH; q++) {
-            for (let r = 0; r < MAP_HEIGHT; r++) {
-                const rand = Math.random();
-                let terrainType: TerrainType;
-                if (rand < 0.25) terrainType = TerrainType.Plains;
-                else if (rand < 0.45) terrainType = TerrainType.Forest;
-                else if (rand < 0.60) terrainType = TerrainType.Hills;
-                else if (rand < 0.70) terrainType = TerrainType.Steppe;
-                else if (rand < 0.80) terrainType = TerrainType.Sea;
-                else if (rand < 0.88) terrainType = TerrainType.Desert;
-                else if (rand < 0.93) terrainType = TerrainType.Swamp;
-                else if (rand < 0.96) terrainType = TerrainType.Lake;
-                else if (rand < 0.98) terrainType = TerrainType.Volcanic;
-                else terrainType = TerrainType.Mountains;
+        const elevationNoise = new Noise(Math.random());
+        const moistureNoise = new Noise(Math.random());
+        const biomeNoise = new Noise(Math.random());
 
-                const terrainDef = TERRAIN_DEFINITIONS[terrainType];
-                const hex: Hex = { 
-                    q, r, terrain: terrainType, 
-                    currentFood: terrainDef.maxFood,
-                    currentWood: terrainDef.maxWood,
-                    currentStone: terrainDef.maxStone,
-                    currentHides: terrainDef.maxHides,
-                    currentObsidian: terrainDef.maxObsidian,
-                };
-                hexes.set(axialToString(hex), hex);
+        const ELEVATION_SCALE = 10;
+        const MOISTURE_SCALE = 7;
+        const BIOME_SCALE = 4;
+
+        // Step 1: Initial terrain generation based on noise
+        for (let q = 0; q < width; q++) {
+            for (let r = 0; r < height; r++) {
+                const nx = (q / width) * 2 - 1;
+                const ny = (r / height) * 2 - 1;
+
+                let e =
+                    1.00 * elevationNoise.perlin2(nx * ELEVATION_SCALE, ny * ELEVATION_SCALE) +
+                    0.50 * elevationNoise.perlin2(nx * ELEVATION_SCALE * 2, ny * ELEVATION_SCALE * 2) +
+                    0.25 * elevationNoise.perlin2(nx * ELEVATION_SCALE * 4, ny * ELEVATION_SCALE * 4);
+                e /= (1.00 + 0.50 + 0.25);
+                e = (1 + e) / 2; // Normalize to 0-1
+
+                // Sharper falloff for smaller sea edges
+                const distFromCenter = Math.sqrt(nx * nx + ny * ny);
+                let shapedE = e - Math.pow(distFromCenter, 4);
+
+                let m = (1 + moistureNoise.perlin2(nx * MOISTURE_SCALE, ny * MOISTURE_SCALE)) / 2;
+                let b = (1 + biomeNoise.perlin2(nx * BIOME_SCALE, ny * BIOME_SCALE)) / 2;
+
+                let terrainType: TerrainType;
+                if (shapedE < 0.18) { // Adjusted threshold for new exponent
+                    terrainType = TerrainType.Sea;
+                } else if (shapedE < 0.3) {
+                    terrainType = (m > 0.6) ? TerrainType.Swamp : TerrainType.Plains;
+                } else if (shapedE < 0.7) {
+                    if (b < 0.45) {
+                        if (m < 0.3) terrainType = TerrainType.Desert;
+                        else terrainType = TerrainType.Steppe;
+                    } else {
+                        if (m < 0.25) terrainType = TerrainType.Plains;
+                        else terrainType = TerrainType.Forest;
+                    }
+                } else if (shapedE < 0.85) {
+                    terrainType = TerrainType.Hills;
+                } else {
+                    terrainType = TerrainType.Mountains;
+                }
+                
+                const hex: Hex = { q, r, terrain: terrainType, currentFood: 0, currentWood: 0, currentStone: 0, currentHides: 0, currentObsidian: 0 };
+                hexes.set(axialToString({ q, r }), hex);
             }
         }
+        
+        // Step 2: Separate ocean from inland seas (lakes)
+        const oceanTiles = new Set<string>();
+        const queue: AxialCoords[] = [];
+        let oceanSeed: AxialCoords | null = null;
+        // Find a seed on the map edge
+        for (let q = 0; q < width; q++) {
+            if (hexes.get(axialToString({ q, r: 0 }))?.terrain === TerrainType.Sea) { oceanSeed = { q, r: 0 }; break; }
+            if (hexes.get(axialToString({ q, r: height - 1 }))?.terrain === TerrainType.Sea) { oceanSeed = { q, r: height - 1 }; break; }
+        }
+        if (!oceanSeed) {
+            for (let r = 0; r < height; r++) {
+                if (hexes.get(axialToString({ q: 0, r }))?.terrain === TerrainType.Sea) { oceanSeed = { q: 0, r }; break; }
+                if (hexes.get(axialToString({ q: width - 1, r }))?.terrain === TerrainType.Sea) { oceanSeed = { q: width - 1, r }; break; }
+            }
+        }
+        
+        // Flood fill from the edge to identify all ocean tiles
+        if (oceanSeed) {
+            queue.push(oceanSeed);
+            oceanTiles.add(axialToString(oceanSeed));
+            while (queue.length > 0) {
+                const current = queue.shift()!;
+                for (const dir of axialDirections) {
+                    const neighborCoords = { q: current.q + dir.q, r: current.r + dir.r };
+                    const neighborKey = axialToString(neighborCoords);
+                    const neighborHex = hexes.get(neighborKey);
+                    if (neighborHex && neighborHex.terrain === TerrainType.Sea && !oceanTiles.has(neighborKey)) {
+                        oceanTiles.add(neighborKey);
+                        queue.push(neighborCoords);
+                    }
+                }
+            }
+        }
+        
+        // Any sea tile not connected to the edge is a lake
+        for (const hex of hexes.values()) {
+            if (hex.terrain === TerrainType.Sea && !oceanTiles.has(axialToString(hex))) {
+                hex.terrain = TerrainType.Lake;
+            }
+        }
+
+        const landTiles = Array.from(hexes.values()).filter(h => h.terrain !== TerrainType.Sea && h.terrain !== TerrainType.Lake);
+
+        // Step 3: Place Mountain Ranges and connecting Hills
+        const mountainTiles = new Set<string>();
+        let mountainRanges = 0;
+        let attempts = 0;
+        const potentialRangeStarts = [...landTiles].sort((a,b) => b.q - a.q); // Sort to get some spatial separation
+
+        while (mountainRanges < 2 && attempts < 200 && potentialRangeStarts.length > 0) {
+            attempts++;
+            const randIndex = Math.floor(Math.random() * potentialRangeStarts.length);
+            const startHex = potentialRangeStarts.splice(randIndex, 1)[0];
+            
+            const direction = axialDirections[Math.floor(Math.random() * 6)];
+            const rangeLength = 3;
+            const currentRange: Hex[] = [];
+            let isValidRange = true;
+
+            for (let i = 0; i < rangeLength; i++) {
+                const pos = { q: startHex.q + direction.q * i, r: startHex.r + direction.r * i };
+                const key = axialToString(pos);
+                const hex = hexes.get(key);
+
+                if (!hex || hex.terrain === TerrainType.Sea || hex.terrain === TerrainType.Lake || mountainTiles.has(key)) {
+                    isValidRange = false;
+                    break;
+                }
+                currentRange.push(hex);
+            }
+
+            if (isValidRange) {
+                currentRange.forEach(hex => {
+                    hex.terrain = TerrainType.Mountains;
+                    mountainTiles.add(axialToString(hex));
+                });
+                mountainRanges++;
+            }
+        }
+        
+        // Place connecting hills
+        for (const mountainKey of mountainTiles) {
+            const mountainCoords = stringToAxial(mountainKey);
+            for (const dir of axialDirections) {
+                const neighborCoords = { q: mountainCoords.q + dir.q, r: mountainCoords.r + dir.r };
+                const neighborKey = axialToString(neighborCoords);
+                const neighborHex = hexes.get(neighborKey);
+                
+                if (neighborHex && (neighborHex.terrain === TerrainType.Plains || neighborHex.terrain === TerrainType.Forest || neighborHex.terrain === TerrainType.Steppe || neighborHex.terrain === TerrainType.Desert)) {
+                    if (Math.random() < 0.7) { // High probability to become a hill
+                        neighborHex.terrain = TerrainType.Hills;
+                    }
+                }
+            }
+        }
+
+
+        // Step 4: Place Volcanic Tiles
+        let volcanicCount = Array.from(hexes.values()).filter(h => h.terrain === TerrainType.Volcanic).length;
+        attempts = 0;
+        const mountainAndHillTiles = Array.from(hexes.values()).filter(h => h.terrain === TerrainType.Mountains || h.terrain === TerrainType.Hills);
+        const potentialVolcanoes = [...mountainAndHillTiles];
+        
+        while (volcanicCount < 2 && attempts < 100 && potentialVolcanoes.length > 0) {
+            attempts++;
+            const randIndex = Math.floor(Math.random() * potentialVolcanoes.length);
+            const candidate = potentialVolcanoes.splice(randIndex, 1)[0];
+            
+            if (candidate.terrain !== TerrainType.Volcanic) {
+                candidate.terrain = TerrainType.Volcanic;
+                volcanicCount++;
+            }
+        }
+
+
+        // Step 5: Place Swamps next to Lakes
+        const lakeTiles = Array.from(hexes.values()).filter(h => h.terrain === TerrainType.Lake);
+        for (const lake of lakeTiles) {
+            for (const dir of axialDirections) {
+                const neighborCoords = { q: lake.q + dir.q, r: lake.r + dir.r };
+                const neighborHex = hexes.get(axialToString(neighborCoords));
+                
+                if (neighborHex && (neighborHex.terrain === TerrainType.Plains || neighborHex.terrain === TerrainType.Forest || neighborHex.terrain === TerrainType.Steppe)) {
+                    if (Math.random() < 0.6) { // High probability to become a swamp
+                        neighborHex.terrain = TerrainType.Swamp;
+                    }
+                }
+            }
+        }
+
+
+        // Final Step: Initialize resources for all hexes based on their final terrain type
+        for (const hex of hexes.values()) {
+            const terrainDef = TERRAIN_DEFINITIONS[hex.terrain];
+            hex.currentFood = terrainDef.maxFood;
+            hex.currentWood = terrainDef.maxWood;
+            hex.currentStone = terrainDef.maxStone;
+            hex.currentHides = terrainDef.maxHides;
+            hex.currentObsidian = terrainDef.maxObsidian;
+        }
+        
         return hexes;
     };
 
-    const initializeGame = useCallback(() => {
-        const hexes = generateMap();
+
+    const initializeGame = useCallback((width: number, height: number) => {
+        const hexes = generateMap(width, height);
+        
+        const findValidPlacement = (startPos: AxialCoords, maxRadius: number): AxialCoords => {
+            const isHabitable = (hex: Hex | undefined) => hex && TERRAIN_DEFINITIONS[hex.terrain].movementCost < 99 && !hex.cityId;
+            
+            if (isHabitable(hexes.get(axialToString(startPos)))) return startPos;
+
+            for (let r = 1; r <= maxRadius; r++) {
+                const ring = getHexesInRange(startPos, r).filter(h => hexDistance(startPos, h) === r);
+                for (const hexCoords of ring) {
+                    const hex = hexes.get(axialToString(hexCoords));
+                    if (isHabitable(hex)) return hexCoords;
+                }
+            }
+            // Fallback: Find any passable land tile
+             for (const hex of hexes.values()) {
+                if (isHabitable(hex)) return { q: hex.q, r: hex.r };
+            }
+            return startPos; 
+        };
+
         const players: Player[] = [
             { id: 1, name: 'Player 1', color: '#3b82f6', gold: 50, wood: 50, stone: 50, hides: 20, obsidian: 0, researchPoints: 0, unlockedTechs: [], currentResearchId: null, researchProgress: 0, culture: { nomadism: 0, genderRoles: 0, militarism: 0, unlockedAspects: [] }, actionsThisTurn: { attacks: 0 } },
             { id: 2, name: 'AI Opponent', color: '#ef4444', gold: 50, wood: 50, stone: 50, hides: 20, obsidian: 0, researchPoints: 0, unlockedTechs: [], currentResearchId: null, researchProgress: 0, culture: { nomadism: 0, genderRoles: 0, militarism: 0, unlockedAspects: [] }, actionsThisTurn: { attacks: 0 } },
@@ -291,7 +484,8 @@ const App: React.FC = () => {
         const cities = new Map<string, City>();
 
         // Player 1 setup
-        const p1CityPos = { q: 5, r: 8 };
+        const p1DesiredPos = { q: Math.floor(width * 0.2), r: Math.floor(height * 0.5) };
+        const p1CityPos = findValidPlacement(p1DesiredPos, 15);
         const p1CityKey = axialToString(p1CityPos);
         const p1CityId = generateId();
         let p1StartGarrison: string[] = [];
@@ -313,7 +507,8 @@ const App: React.FC = () => {
 
 
         // Player 2 (AI) setup
-        const p2CityPos = { q: MAP_WIDTH - 6, r: 8 };
+        const p2DesiredPos = { q: Math.floor(width * 0.8), r: Math.floor(height * 0.5) };
+        const p2CityPos = findValidPlacement(p2DesiredPos, 15);
         const p2CityKey = axialToString(p2CityPos);
         const p2CityId = generateId();
         let p2StartGarrison: string[] = [];
@@ -338,6 +533,8 @@ const App: React.FC = () => {
             armies: new Map(),
             currentPlayerId: 1,
             turn: 1,
+            mapWidth: width,
+            mapHeight: height,
         });
         setGameOverMessage(null);
         setSelectedHex(null);
@@ -357,7 +554,12 @@ const App: React.FC = () => {
         setArmyDeploymentInfo(null);
     }, []);
 
-    useEffect(() => { initializeGame(); }, [initializeGame]);
+    const handleStartGame = useCallback((size: WorldSize) => {
+        const { width, height } = MAP_SIZES[size];
+        initializeGame(width, height);
+        setGameStarted(true);
+        playSound('endTurn');
+    }, [initializeGame]);
 
     const calculateVisibility = useCallback((gs: GameState) => {
         const newVisible = new Set<string>();
@@ -1518,6 +1720,15 @@ const App: React.FC = () => {
 
     const handleStartFormArmy = useCallback((sourceId: string, sourceType: 'city' | 'army') => {
         if (!gameState) return;
+        
+        if (sourceType === 'army') {
+            const army = gameState.armies.get(sourceId);
+            if (army && army.movementPoints <= 0) {
+                playSound('error');
+                return;
+            }
+        }
+        
         setArmyFormationSource({ sourceId, sourceType });
     }, [gameState]);
 
@@ -1562,6 +1773,9 @@ const App: React.FC = () => {
         setArmyDeploymentInfo(info);
         setArmyFormationSource(null);
 
+        const player = gameState.players.find(p => p.id === gameState.currentPlayerId);
+        if (!player) return;
+
         let sourcePosition: AxialCoords | undefined;
         if(info.sourceType === 'city') {
             sourcePosition = gameState.cities.get(info.sourceId)?.position;
@@ -1576,8 +1790,14 @@ const App: React.FC = () => {
             const neighborPos = { q: sourcePosition.q + dir.q, r: sourcePosition.r + dir.r };
             const neighborKey = axialToString(neighborPos);
             const neighborHex = gameState.hexes.get(neighborKey);
+            
             if (neighborHex && !neighborHex.armyId && !neighborHex.cityId) {
-                newDeployableHexes.add(neighborKey);
+                const terrainDef = TERRAIN_DEFINITIONS[neighborHex.terrain];
+                const isPassable = terrainDef.movementCost < 99 || (terrainDef.requiredTech && player.unlockedTechs.includes(terrainDef.requiredTech));
+
+                if(isPassable) {
+                    newDeployableHexes.add(neighborKey);
+                }
             }
         }
         setDeployableHexes(newDeployableHexes);
@@ -1872,7 +2092,11 @@ const App: React.FC = () => {
     const toggleFogOfWar = () => setFogOfWarEnabled(prev => !prev);
     const toggleSettingsMenu = () => setIsSettingsOpen(prev => !prev);
     
-    if (!gameState) return <div className="w-screen h-screen bg-gray-900 text-white flex items-center justify-center">Loading Game...</div>;
+    if (!gameStarted) {
+        return <StartScreen onStartGame={handleStartGame} />;
+    }
+
+    if (!gameState) return <div className="w-screen h-screen bg-gray-900 text-white flex items-center justify-center">Generating World...</div>;
     
     const projectedIncome = calculateIncome(gameState.currentPlayerId, gameState);
     const cityOnSelectedHex = selectedHex ? gameState.cities.get(gameState.hexes.get(axialToString(selectedHex))?.cityId ?? '') : null;
@@ -1909,7 +2133,7 @@ const App: React.FC = () => {
             {isResearchScreenOpen && <ResearchScreen gameState={gameState} onClose={() => setIsResearchScreenOpen(false)} onSetResearch={handleSetCurrentResearch} />}
             {isCultureScreenOpen && <CultureScreen gameState={gameState} onClose={() => setIsCultureScreenOpen(false)} />}
             {isSettingsOpen && <SettingsMenu volume={volume} onVolumeChange={handleVolumeChange} isMuted={isMutedState} onMuteToggle={handleMuteToggle} onClose={() => setIsSettingsOpen(false)} />}
-            {gameOverMessage && <div className="absolute inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center z-50"><h2 className="text-6xl font-bold text-white mb-4">Game Over</h2><p className="text-3xl text-yellow-400 mb-8">{gameOverMessage}</p><button onClick={initializeGame} className="px-8 py-4 bg-blue-600 hover:bg-blue-500 rounded-lg text-xl font-bold text-white transition-colors duration-200">Play Again</button></div>}
+            {gameOverMessage && <div className="absolute inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center z-50"><h2 className="text-6xl font-bold text-white mb-4">Game Over</h2><p className="text-3xl text-yellow-400 mb-8">{gameOverMessage}</p><button onClick={() => setGameStarted(false)} className="px-8 py-4 bg-blue-600 hover:bg-blue-500 rounded-lg text-xl font-bold text-white transition-colors duration-200">Main Menu</button></div>}
         </>
     );
 };

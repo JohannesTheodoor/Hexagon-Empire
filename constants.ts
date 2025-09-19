@@ -1,5 +1,11 @@
 import { TerrainType, TerrainDefinition, UnitType, UnitDefinition, UnitSize, BuildingType, BuildingDefinition, Gender, CampBuildingType, CampBuildingDefinition } from './types';
 
+export const MAP_SIZES = {
+    small: { width: 25, height: 17 },
+    medium: { width: 35, height: 25 },
+    large: { width: 50, height: 35 },
+};
+
 export const MAP_WIDTH = 25;
 export const MAP_HEIGHT = 17;
 export const HEX_SIZE = 40;

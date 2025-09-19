@@ -221,6 +221,8 @@ export interface GameState {
   players: Player[];
   currentPlayerId: number;
   turn: number;
+  mapWidth: number;
+  mapHeight: number;
 }
 
 export interface ArmyDeploymentInfo {

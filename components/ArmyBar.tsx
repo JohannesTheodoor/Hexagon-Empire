@@ -124,6 +124,7 @@ const ArmyBar: React.FC<ArmyBarProps> = ({ gameState, selectedHex, selectedUnitI
 
     const showFormArmyButton = isPlayersTurn && cityOnHex && cityOnHex.garrison.length > 0;
     const showSplitArmyButton = isPlayersTurn && army && army.unitIds.length > 1;
+    const isSplitDisabled = showSplitArmyButton && army ? army.movementPoints <= 0 : false;
     const showCampButton = isPlayersTurn && army;
 
     return (
@@ -138,8 +139,12 @@ const ArmyBar: React.FC<ArmyBarProps> = ({ gameState, selectedHex, selectedUnitI
                             if (showFormArmyButton && cityOnHex) onStartFormArmy(cityOnHex.id, 'city');
                             else if (showSplitArmyButton && army) onStartFormArmy(army.id, 'army');
                         }}
-                        className="w-20 h-[42px] rounded-lg p-1 flex items-center justify-center bg-blue-800/50 hover:bg-blue-700/70 transition-colors"
-                        title={showFormArmyButton ? "Form a new army" : "Split this army"}
+                        className={`w-20 h-[42px] rounded-lg p-1 flex items-center justify-center bg-blue-800/50 transition-colors ${isSplitDisabled ? 'cursor-not-allowed opacity-50' : 'hover:bg-blue-700/70'}`}
+                        title={
+                            isSplitDisabled ? "Cannot split: No movement points left" :
+                            showFormArmyButton ? "Form a new army" : "Split this army"
+                        }
+                        disabled={isSplitDisabled}
                     >
                         <PlusIcon className="w-6 h-6" />
                         <span className="text-xs font-semibold ml-1">{showFormArmyButton ? 'Form' : 'Split'}</span>
@@ -149,8 +154,8 @@ const ArmyBar: React.FC<ArmyBarProps> = ({ gameState, selectedHex, selectedUnitI
                     <button
                         onClick={() => onToggleCamp(army.id)}
                         className={`w-20 h-[42px] rounded-lg p-1 flex items-center justify-center transition-colors ${army.isCamped ? 'bg-yellow-800/70 hover:bg-yellow-700/80' : 'bg-green-800/50 hover:bg-green-700/70'}`}
-                        title={army.isCamped ? "Break camp" : "Make camp (ends turn)"}
-                        disabled={!army.isCamped && army.movementPoints === 0}
+                        title={army.isCamped ? "Break camp" : "Make camp (requires movement points)"}
+                        disabled={!army.isCamped && army.movementPoints <= 0}
                     >
                         <CampIcon className="w-6 h-6" />
                         <span className="text-xs font-semibold ml-1">{army.isCamped ? 'Break' : 'Camp'}</span>
