@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { GameState, City, UnitType, BuildingType, BuildQueueItem, Unit, TerrainType, Gender } from '../types';
+import { GameState, City, UnitType, BuildingType, BuildQueueItem, Unit, TerrainType, Gender, ResourceCost } from '../types';
 import { BASE_CITY_INCOME, INCOME_PER_INFLUENCE_LEVEL, BUILDING_DEFINITIONS, UNIT_DEFINITIONS, TERRAIN_DEFINITIONS, BASE_CITY_FOOD_STORAGE, GATHERING_YIELD_PER_POINT } from '../constants';
-import { CloseIcon, FoodIcon, InfantryIcon, TankIcon, MarketplaceIcon, GranaryIcon, PlusIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, WoodIcon, StoneIcon, HidesIcon, ObsidianIcon } from './Icons';
+import { CloseIcon, FoodIcon, InfantryIcon, TankIcon, MarketplaceIcon, GranaryIcon, PlusIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, WoodIcon, StoneIcon, HidesIcon, ObsidianIcon, ArrowDownIcon } from './Icons';
 import { TECH_TREE } from '../techtree';
 import StackedUnitCard from './StackedUnitCard';
 
@@ -12,6 +12,7 @@ interface CityScreenProps {
   onBuildBuilding: (cityId: string, buildingType: BuildingType) => void;
   onProduceUnit: (unitType: UnitType, cityId: string) => void;
   onUpdateFocus: (cityId: string, focus: { productionFocus: number; resourceFocus: City['resourceFocus']}) => void;
+  onDropResource: (containerId: string, containerType: 'city' | 'army', resource: keyof ResourceCost, amount: number) => void;
 }
 
 const renderQueueItemIcon = (item: BuildQueueItem) => {
@@ -44,11 +45,30 @@ const renderBuildingIcon = (buildingType: BuildingType) => {
     }
 }
 
-const CityScreen: React.FC<CityScreenProps> = ({ gameState, cityId, onClose, onBuildBuilding, onProduceUnit, onUpdateFocus }) => {
+const ResourceCostDisplay: React.FC<{ cost: ResourceCost }> = ({ cost }) => {
+    const entries = Object.entries(cost);
+    if (entries.length === 0) return null;
+
+    return (
+        <div className="flex items-center gap-2 text-xs text-gray-400">
+            <span>Cost:</span>
+            {cost.gold && <span>{cost.gold}G</span>}
+            {cost.wood && <span className="flex items-center gap-0.5">{cost.wood}<WoodIcon className="w-3 h-3 text-yellow-700"/></span>}
+            {cost.stone && <span className="flex items-center gap-0.5">{cost.stone}<StoneIcon className="w-3 h-3 text-gray-400"/></span>}
+            {cost.hides && <span className="flex items-center gap-0.5">{cost.hides}<HidesIcon className="w-3 h-3 text-orange-400"/></span>}
+            {cost.obsidian && <span className="flex items-center gap-0.5">{cost.obsidian}<ObsidianIcon className="w-3 h-3 text-purple-400"/></span>}
+        </div>
+    );
+};
+
+
+const CityScreen: React.FC<CityScreenProps> = ({ gameState, cityId, onClose, onBuildBuilding, onProduceUnit, onUpdateFocus, onDropResource }) => {
   const city = gameState.cities.get(cityId);
   
   const [productionFocus, setProductionFocus] = useState(city?.productionFocus ?? 100);
   const [resourceFocus, setResourceFocus] = useState(city?.resourceFocus ?? { wood: false, stone: false, hides: false, obsidian: false });
+  const [isStorageManagerOpen, setStorageManagerOpen] = useState(false);
+  const [dropAmount, setDropAmount] = useState('');
 
   if (!city) return null;
 
@@ -102,11 +122,6 @@ const CityScreen: React.FC<CityScreenProps> = ({ gameState, cityId, onClose, onB
 
   const foodSurplus = yields.food - foodConsumption;
   
-  let foodStorageCapacity = BASE_CITY_FOOD_STORAGE;
-  for (const buildingType of city.buildings) {
-      foodStorageCapacity += BUILDING_DEFINITIONS[buildingType].foodStorageBonus ?? 0;
-  }
-
   let goldFromCity = BASE_CITY_INCOME + (city.controlledTiles.length - 1) * INCOME_PER_INFLUENCE_LEVEL;
   for(const buildingType of city.buildings) {
       goldFromCity += BUILDING_DEFINITIONS[buildingType].goldBonus ?? 0;
@@ -128,6 +143,14 @@ const CityScreen: React.FC<CityScreenProps> = ({ gameState, cityId, onClose, onB
     setResourceFocus(newResourceFocus);
     onUpdateFocus(city.id, { productionFocus, resourceFocus: newResourceFocus });
   };
+  
+  const handleDropClick = (resource: keyof ResourceCost, amountStr: string) => {
+      const amount = parseInt(amountStr, 10);
+      if (!isNaN(amount) && amount > 0) {
+          onDropResource(city.id, 'city', resource, amount);
+          setDropAmount('');
+      }
+  };
 
   const renderUnitProduction = () => {
     if (!isCurrentPlayerCity) return null;
@@ -146,7 +169,12 @@ const CityScreen: React.FC<CityScreenProps> = ({ gameState, cityId, onClose, onB
                     const isAdvancedMale = def.gender === Gender.Male && [UnitType.Infantry, UnitType.Shaman].includes(unitType);
                     const hasSacrifice = isAdvancedMale ? garrisonedUnits.some(u => u.type === UnitType.Tribesman) : true;
 
-                    const canAfford = player.gold >= def.cost && hasSacrifice;
+                    const canAfford = player.gold >= (def.cost.gold ?? 0)
+                                    && (city.localResources.wood ?? 0) >= (def.cost.wood ?? 0)
+                                    && (city.localResources.stone ?? 0) >= (def.cost.stone ?? 0)
+                                    && (city.localResources.hides ?? 0) >= (def.cost.hides ?? 0)
+                                    && (city.localResources.obsidian ?? 0) >= (def.cost.obsidian ?? 0)
+                                    && hasSacrifice;
                     
                     return (
                         <div key={unitType} className="flex justify-between items-center p-2 bg-gray-900/50 rounded-lg">
@@ -155,10 +183,11 @@ const CityScreen: React.FC<CityScreenProps> = ({ gameState, cityId, onClose, onB
                               {unitType === UnitType.Tank && <TankIcon className="w-8 h-8" />}
                               {unitType === UnitType.Shaman && <ShamanIcon className="w-8 h-8" />}
                               <div>
-                                  <span className="font-bold">{unitType}</span>
-                                  <div className="text-xs block text-gray-400">
-                                      <span>Cost: {def.cost}G, Prod: {def.productionCost}</span>
-                                      {isAdvancedMale && <span className="ml-2 text-orange-400">(Req. 1 Tribesman)</span>}
+                                  <p className="font-bold">{unitType}</p>
+                                  <ResourceCostDisplay cost={def.cost} />
+                                  <div className="text-xs text-gray-400">
+                                    <span>Prod: {def.productionCost}</span>
+                                    {isAdvancedMale && <span className="ml-2 text-orange-400">(Req. 1 Tribesman)</span>}
                                   </div>
                               </div>
                             </div>
@@ -182,6 +211,7 @@ const CityScreen: React.FC<CityScreenProps> = ({ gameState, cityId, onClose, onB
   const focusedResourcesCount = Object.values(resourceFocus).filter(v => v).length;
   const pointsPerResource = focusedResourcesCount > 0 ? gatheringPoints / focusedResourcesCount : 0;
   const projectedYield = Math.round(pointsPerResource * GATHERING_YIELD_PER_POINT);
+  const totalStoredResources = Object.values(city.localResources).reduce((sum, val) => sum + (val || 0), 0);
 
   return (
     <div 
@@ -234,13 +264,44 @@ const CityScreen: React.FC<CityScreenProps> = ({ gameState, cityId, onClose, onB
               </div>
             </div>
             
+             <div>
+                <h3 className="text-lg font-semibold text-gray-300 mb-1">Local Resource Storage</h3>
+                <div className="w-full h-2.5 bg-gray-700 rounded-full overflow-hidden border border-black my-1">
+                    <div className="bg-yellow-500 h-full rounded-full" style={{ width: `${(totalStoredResources / city.storageCapacity) * 100}%`}}></div>
+                </div>
+                <p className="text-right text-xs">{totalStoredResources} / {city.storageCapacity}</p>
+                 <div className="grid grid-cols-2 text-sm gap-x-4 gap-y-1 mt-2">
+                    <p className="flex items-center gap-1.5"><WoodIcon className="w-4 h-4 text-yellow-700" /> Wood: <span className="font-semibold">{city.localResources.wood ?? 0}</span></p>
+                    <p className="flex items-center gap-1.5"><StoneIcon className="w-4 h-4 text-gray-400" /> Stone: <span className="font-semibold">{city.localResources.stone ?? 0}</span></p>
+                    <p className="flex items-center gap-1.5"><HidesIcon className="w-4 h-4 text-orange-400" /> Hides: <span className="font-semibold">{city.localResources.hides ?? 0}</span></p>
+                    <p className="flex items-center gap-1.5"><ObsidianIcon className="w-4 h-4 text-purple-400" /> Obsidian: <span className="font-semibold">{city.localResources.obsidian ?? 0}</span></p>
+                 </div>
+                 <button onClick={() => setStorageManagerOpen(prev => !prev)} className="mt-2 text-sm text-cyan-400 hover:underline">
+                    {isStorageManagerOpen ? 'Hide' : 'Manage Storage'}
+                 </button>
+            </div>
+            {isStorageManagerOpen && (
+                <div className="bg-gray-900/50 p-2 rounded-lg space-y-2">
+                    {Object.keys(city.localResources).map(resStr => {
+                        const res = resStr as keyof ResourceCost;
+                        const amount = city.localResources[res] ?? 0;
+                        if (amount === 0) return null;
+                        return (
+                             <div key={res} className="flex items-center justify-between text-sm">
+                                <span className="capitalize">{res}: {amount}</span>
+                                <button onClick={() => onDropResource(city.id, 'city', res, amount)} title="Drop all" className="p-1 rounded bg-red-800 hover:bg-red-700"><ArrowDownIcon className="w-4 h-4"/></button>
+                             </div>
+                        )
+                    })}
+                </div>
+            )}
             <div>
                 <h3 className="text-lg font-semibold text-gray-300 mb-1">Resource Yield / Turn</h3>
                 <div className="grid grid-cols-2 text-sm gap-x-4">
                   <p>Gold: <span className="font-semibold text-yellow-400">+{goldFromCity}</span></p>
                   <p className="flex items-center gap-1.5"><FoodIcon className="w-4 h-4" /> Food: <span className={`font-semibold ${foodSurplus >= 0 ? 'text-green-400' : 'text-red-400'}`}>{foodSurplus >= 0 ? '+' : ''}{foodSurplus}</span></p>
                 </div>
-                 <p className="text-xs text-gray-400 mt-1">Food Stored: {city.food}/{foodStorageCapacity}</p>
+                 <p className="text-xs text-gray-400 mt-1">Food Stored: {city.food}/{city.foodStorageCapacity}</p>
             </div>
 
           </div>

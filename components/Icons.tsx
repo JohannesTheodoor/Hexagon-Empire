@@ -211,6 +211,12 @@ export const ForagingPostIcon: React.FC<{ className?: string }> = ({ className }
     </svg>
 );
 
+export const StoragePitIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M3 3v18h18V3H3zm16 16H5V5h14v14zM7 7h10v2H7V7zm0 4h10v2H7v-2z"/>
+    </svg>
+);
+
 export const SailingIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
         <path d="M14 6l-1 5H9.78C10.33 10.37 11.1 10 12 10c1.1 0 2 .9 2 2zm8-4H2C.9 2 0 2.9 0 4v12c0 1.1.9 2 2 2h15l-1.1-3.11c-.93-2.61.55-5.46 3.1-6.4L22 7V4c0-1.1-.9-2-2-2z"/>

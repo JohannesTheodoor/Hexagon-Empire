@@ -153,7 +153,7 @@ const ArmyBar: React.FC<ArmyBarProps> = ({ gameState, selectedHex, selectedUnitI
                  {showCampButton && army && (
                     <button
                         onClick={() => onToggleCamp(army.id)}
-                        className={`w-20 h-[42px] rounded-lg p-1 flex items-center justify-center transition-colors ${army.isCamped ? 'bg-yellow-800/70 hover:bg-yellow-700/80' : 'bg-green-800/50 hover:bg-green-700/70'}`}
+                        className={`w-20 h-[42px] rounded-lg p-1 flex items-center justify-center transition-colors ${army.isCamped ? 'bg-yellow-800/70 hover:bg-yellow-700/80' : 'bg-green-800/50 hover:bg-green-700/70'} disabled:opacity-50 disabled:cursor-not-allowed`}
                         title={army.isCamped ? "Break camp" : "Make camp (requires movement points)"}
                         disabled={!army.isCamped && army.movementPoints <= 0}
                     >

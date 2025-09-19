@@ -48,9 +48,11 @@ export enum Gender {
     None,
 }
 
+export type ResourceCost = Partial<Record<'gold' | 'wood' | 'stone' | 'hides' | 'obsidian', number>>;
+
 export interface UnitDefinition {
     movement: number;
-    cost: number; // Gold cost
+    cost: ResourceCost;
     productionCost: number;
     attack: number;
     defense: number;
@@ -59,7 +61,8 @@ export interface UnitDefinition {
     foodGatherRate: number;
     foodConsumption: number;
     productionYield: number;
-    carryCapacity: number;
+    carryCapacity: number; // General resource capacity contribution
+    foodCarryCapacity: number;
     researchYield?: number;
     healingBonus?: number;
     requiredTech?: string;
@@ -75,27 +78,30 @@ export enum CampBuildingType {
     Palisade = 'Palisade',
     ScoutTent = 'Scout Tent',
     ForagingPost = 'Foraging Post',
+    StoragePit = 'Storage Pit',
 }
 
 export interface BuildingDefinition {
     name: string;
     description: string;
-    cost: number; // Gold cost
+    cost: ResourceCost;
     productionCost: number;
     goldBonus?: number;
     foodBonus?: number;
     foodStorageBonus?: number;
+    storageBonus?: number;
     requiredTech?: string;
 }
 
 export interface CampBuildingDefinition {
     name: string;
     description: string;
-    cost: number;
+    cost: ResourceCost;
     productionCost: number;
     defenseBonus?: number;
     visionBonus?: number;
     foodGatherBonus?: number;
+    storageBonus?: number;
     requiredTech?: string;
 }
 
@@ -145,6 +151,7 @@ export interface Army {
   foundingTurn: number;
   isCamped?: boolean;
   controlledTiles?: string[];
+  isConnectedToNetwork?: boolean;
   // New properties for when isCamped is true
   level?: number;
   population?: number;
@@ -159,6 +166,8 @@ export interface Army {
       hides: boolean;
       obsidian: boolean;
   };
+  localResources: ResourceCost;
+  storageCapacity: number;
 }
 
 export interface City {
@@ -185,6 +194,9 @@ export interface City {
       hides: boolean;
       obsidian: boolean;
   };
+  isConnectedToNetwork: boolean;
+  localResources: ResourceCost;
+  storageCapacity: number;
 }
 
 export interface PlayerCulture {
@@ -199,10 +211,6 @@ export interface Player {
   name: string;
   color: string;
   gold: number;
-  wood: number;
-  stone: number;
-  hides: number;
-  obsidian: number;
   researchPoints: number; // Unassigned research points
   unlockedTechs: string[];
   currentResearchId: string | null; // The ID of the tech currently being researched

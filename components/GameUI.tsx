@@ -11,6 +11,7 @@ interface GameUIProps {
   selectedUnitId: string | null;
   selectedArmyId: string | null;
   projectedIncome: number;
+  totalPlayerResources: { wood: number; stone: number; hides: number; obsidian: number };
   campTileSelectionInfo: { armyId: string; totalTiles: number; selectedTiles: Set<string> } | null;
   onEndTurn: () => void;
   onBuyInfluenceTile: (cityId: string) => void;
@@ -20,7 +21,7 @@ interface GameUIProps {
   isAITurning: boolean;
 }
 
-const GameUI: React.FC<GameUIProps> = ({ gameState, selectedHex, selectedUnitId, selectedArmyId, projectedIncome, campTileSelectionInfo, onEndTurn, onBuyInfluenceTile, onOpenSelectionScreen, onOpenResearchScreen, onOpenCultureScreen, isAITurning }) => {
+const GameUI: React.FC<GameUIProps> = ({ gameState, selectedHex, selectedUnitId, selectedArmyId, projectedIncome, totalPlayerResources, campTileSelectionInfo, onEndTurn, onBuyInfluenceTile, onOpenSelectionScreen, onOpenResearchScreen, onOpenCultureScreen, isAITurning }) => {
   const [isFoodDetailsExpanded, setIsFoodDetailsExpanded] = useState(false);
   const currentPlayer = gameState.players.find(p => p.id === gameState.currentPlayerId);
   
@@ -64,8 +65,8 @@ const GameUI: React.FC<GameUIProps> = ({ gameState, selectedHex, selectedUnitId,
                 <p>Gather: <span className="font-semibold text-green-400">{unitDef.foodGatherRate}</span></p>
                 <p>Consumes: <span className="font-semibold text-orange-400">{unitDef.foodConsumption}</span></p>
                 <p>Production: <span className="font-semibold text-yellow-400">{unitDef.productionYield}</span></p>
-                <p>Capacity: <span className="font-semibold text-gray-300">{unitDef.carryCapacity}</span></p>
-                 {army && <p>Food Stored: <span className="font-semibold text-green-300">{unit.foodStored}</span></p>}
+                <p>Res. Capacity: <span className="font-semibold text-gray-300">{unitDef.carryCapacity}</span></p>
+                 {army && <p>Food Stored: <span className="font-semibold text-green-300">{unit.foodStored} / {unitDef.foodCarryCapacity}</span></p>}
             </div>
         </div>
     );
@@ -74,7 +75,7 @@ const GameUI: React.FC<GameUIProps> = ({ gameState, selectedHex, selectedUnitId,
   const renderArmyInfo = (army: Army) => {
     const unitsInArmy = army.unitIds.map(id => gameState.units.get(id)!);
     const totalFoodStored = unitsInArmy.reduce((sum, u) => sum + u.foodStored, 0);
-    const totalCarryCapacity = unitsInArmy.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].carryCapacity, 0);
+    const totalFoodCarryCapacity = unitsInArmy.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].foodCarryCapacity, 0);
     const totalConsumption = unitsInArmy.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].foodConsumption, 0);
     
     const armyHex = gameState.hexes.get(axialToString(army.position));
@@ -103,7 +104,7 @@ const GameUI: React.FC<GameUIProps> = ({ gameState, selectedHex, selectedUnitId,
                         <span className="font-bold">Food Supply</span>
                     </div>
                     <span className="font-semibold">
-                        {totalFoodStored} / {totalCarryCapacity}
+                        {totalFoodStored} / {totalFoodCarryCapacity}
                     </span>
                 </button>
 
@@ -255,21 +256,21 @@ const GameUI: React.FC<GameUIProps> = ({ gameState, selectedHex, selectedUnitId,
                 <span className="font-bold text-lg text-yellow-400">G</span>
                 <span className="font-semibold">{currentPlayer.gold}{!isAITurning && <span className="text-green-400 text-xs">(+{projectedIncome})</span>}</span>
             </div>
-            <div className="flex items-center gap-1.5" title="Wood">
+            <div className="flex items-center gap-1.5" title="Total Wood">
                 <WoodIcon className="w-4 h-4 text-yellow-700" />
-                <span className="font-semibold">{currentPlayer.wood}</span>
+                <span className="font-semibold">{totalPlayerResources.wood}</span>
             </div>
-            <div className="flex items-center gap-1.5" title="Stone">
+            <div className="flex items-center gap-1.5" title="Total Stone">
                 <StoneIcon className="w-4 h-4 text-gray-400" />
-                <span className="font-semibold">{currentPlayer.stone}</span>
+                <span className="font-semibold">{totalPlayerResources.stone}</span>
             </div>
-            <div className="flex items-center gap-1.5" title="Hides">
+            <div className="flex items-center gap-1.5" title="Total Hides">
                 <HidesIcon className="w-4 h-4 text-orange-400" />
-                <span className="font-semibold">{currentPlayer.hides}</span>
+                <span className="font-semibold">{totalPlayerResources.hides}</span>
             </div>
-             <div className="flex items-center gap-1.5" title="Obsidian">
+             <div className="flex items-center gap-1.5" title="Total Obsidian">
                 <ObsidianIcon className="w-4 h-4 text-purple-400" />
-                <span className="font-semibold">{currentPlayer.obsidian}</span>
+                <span className="font-semibold">{totalPlayerResources.obsidian}</span>
             </div>
         </div>
         

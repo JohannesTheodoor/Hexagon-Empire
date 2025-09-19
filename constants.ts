@@ -52,51 +52,52 @@ export const TERRAIN_DEFINITIONS: Record<TerrainType, TerrainDefinition> = {
 
 export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     [UnitType.Infantry]: { 
-        movement: 2, cost: 10, productionCost: 300, attack: 6, defense: 3, maxHp: 10, 
+        movement: 2, cost: { gold: 10, hides: 5 }, productionCost: 300, attack: 6, defense: 3, maxHp: 10, 
         size: UnitSize.Small, foodGatherRate: 1, foodConsumption: 3, 
-        productionYield: 1, carryCapacity: 5, researchYield: 0, healingBonus: 0,
+        productionYield: 1, carryCapacity: 3, foodCarryCapacity: 2, researchYield: 0, healingBonus: 0,
         gender: Gender.Male,
     },
     [UnitType.Tank]: { 
-        movement: 4, cost: 25, productionCost: 800, attack: 10, defense: 6, maxHp: 20, 
+        movement: 4, cost: { gold: 25, stone: 15 }, productionCost: 800, attack: 10, defense: 6, maxHp: 20, 
         size: UnitSize.Large, foodGatherRate: 0, foodConsumption: 5, 
-        productionYield: 0, carryCapacity: 10, requiredTech: 'forging', researchYield: 0, healingBonus: 0,
+        productionYield: 0, carryCapacity: 5, foodCarryCapacity: 0, requiredTech: 'forging', researchYield: 0, healingBonus: 0,
         gender: Gender.None,
     },
     [UnitType.Tribesman]: { 
-        movement: 1, cost: 5, productionCost: 100, attack: 1, defense: 1, maxHp: 5, 
+        movement: 1, cost: { gold: 5 }, productionCost: 100, attack: 1, defense: 1, maxHp: 5, 
         size: UnitSize.Small, foodGatherRate: 1, foodConsumption: 1, 
-        productionYield: 2, carryCapacity: 2, researchYield: 0, healingBonus: 0,
+        productionYield: 2, carryCapacity: 2, foodCarryCapacity: 1, researchYield: 0, healingBonus: 0,
         gender: Gender.Male,
     },
     [UnitType.Tribeswoman]: { 
-        movement: 1, cost: 5, productionCost: 100, attack: 1, defense: 1, maxHp: 5, 
+        movement: 1, cost: { gold: 5 }, productionCost: 100, attack: 1, defense: 1, maxHp: 5, 
         size: UnitSize.Small, foodGatherRate: 2, foodConsumption: 1, 
-        productionYield: 1, carryCapacity: 2, researchYield: 0, healingBonus: 0,
+        productionYield: 1, carryCapacity: 1, foodCarryCapacity: 2, researchYield: 0, healingBonus: 0,
         gender: Gender.Female,
     },
     [UnitType.Child]: {
-        movement: 1, cost: 0, productionCost: 0, attack: 0, defense: 0, maxHp: 3,
+        movement: 1, cost: {}, productionCost: 0, attack: 0, defense: 0, maxHp: 3,
         size: UnitSize.Small, foodGatherRate: 0, foodConsumption: 1,
-        productionYield: 0, carryCapacity: 0, researchYield: 0, healingBonus: 0
+        productionYield: 0, carryCapacity: 0, foodCarryCapacity: 0, researchYield: 0, healingBonus: 0
     },
     [UnitType.Shaman]: {
-        movement: 1, cost: 15, productionCost: 400, attack: 1, defense: 2, maxHp: 8,
+        movement: 1, cost: { gold: 15, obsidian: 2 }, productionCost: 400, attack: 1, defense: 2, maxHp: 8,
         size: UnitSize.Small, foodGatherRate: 0, foodConsumption: 2,
-        productionYield: 0, carryCapacity: 5, researchYield: 2, healingBonus: 1,
+        productionYield: 0, carryCapacity: 1, foodCarryCapacity: 2, researchYield: 2, healingBonus: 1,
         gender: Gender.Male,
     }
 };
 
 export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
-    [BuildingType.Marketplace]: { name: 'Marketplace', description: '+5 Gold per turn.', cost: 100, productionCost: 1000, goldBonus: 5, requiredTech: 'construction' },
-    [BuildingType.Granary]: { name: 'Granary', description: '+10 Food production & +50 Food storage.', cost: 75, productionCost: 600, foodBonus: 10, foodStorageBonus: 50, requiredTech: 'agriculture' },
+    [BuildingType.Marketplace]: { name: 'Marketplace', description: '+5 Gold per turn, +50 resource storage.', cost: { gold: 100, wood: 50 }, productionCost: 1000, goldBonus: 5, storageBonus: 50, requiredTech: 'construction' },
+    [BuildingType.Granary]: { name: 'Granary', description: '+10 Food production & +50 Food storage.', cost: { gold: 75, wood: 20, stone: 10 }, productionCost: 600, foodBonus: 10, foodStorageBonus: 50, requiredTech: 'agriculture' },
 };
 
 export const CAMP_BUILDING_DEFINITIONS: Record<CampBuildingType, CampBuildingDefinition> = {
-    [CampBuildingType.Palisade]: { name: 'Palisade', description: '+2 Defense bonus for the camp.', cost: 50, productionCost: 500, defenseBonus: 2 },
-    [CampBuildingType.ScoutTent]: { name: 'Scout Tent', description: '+1 Vision range for the camp.', cost: 40, productionCost: 400, visionBonus: 1 },
-    [CampBuildingType.ForagingPost]: { name: 'Foraging Post', description: '+5 Food gathering per turn from this tile.', cost: 60, productionCost: 600, foodGatherBonus: 5 },
+    [CampBuildingType.Palisade]: { name: 'Palisade', description: '+2 Defense bonus for the camp.', cost: { wood: 50 }, productionCost: 500, defenseBonus: 2 },
+    [CampBuildingType.ScoutTent]: { name: 'Scout Tent', description: '+1 Vision range for the camp.', cost: { wood: 10, hides: 30 }, productionCost: 400, visionBonus: 1 },
+    [CampBuildingType.ForagingPost]: { name: 'Foraging Post', description: '+5 Food gathering per turn from this tile.', cost: { wood: 60 }, productionCost: 600, foodGatherBonus: 5 },
+    [CampBuildingType.StoragePit]: { name: 'Storage Pit', description: '+100 resource storage capacity.', cost: { wood: 40 }, productionCost: 300, storageBonus: 100 },
 };
 
 export const axialDirections: {q: number, r: number}[] = [
