@@ -133,7 +133,8 @@ export interface Hex extends AxialCoords {
   currentHides: number;
   currentObsidian: number;
   wasStarving?: boolean;
-  currentDiseaseRisk: number;
+  wasSick?: boolean;
+  armyPresenceTurns?: number;
 }
 
 export interface Unit {

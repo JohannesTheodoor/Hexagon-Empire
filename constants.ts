@@ -43,8 +43,7 @@ export const DISEASE_RISK_BASE: Record<'Low' | 'Medium' | 'High', number> = {
   Medium: 10,
   High: 20,
 };
-export const DISEASE_RISK_INCREASE_PER_TURN = 5;
-export const DISEASE_RISK_DECREASE_PER_TURN = 2;
+export const DISEASE_RISK_INCREASE_PER_EXPOSURE = 3;
 export const DISEASE_DAMAGE = 1;
 
 export const TERRAIN_DEFINITIONS: Record<TerrainType, TerrainDefinition> = {

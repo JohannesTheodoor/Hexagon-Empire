@@ -12,7 +12,7 @@ import CreateArmyScreen from './components/CreateArmyScreen';
 import StartScreen from './components/StartScreen';
 // FIX: Import UnitDefinition to resolve 'Cannot find name' error.
 import { GameState, AxialCoords, Hex, TerrainType, Unit, UnitType, City, Player, UnitSize, BuildingType, BuildQueueItem, TechEffectType, Army, ArmyDeploymentInfo, Gender, CampBuildingType, UnitDefinition, ResourceCost } from './types';
-import { MAP_SIZES, MAP_WIDTH, MAP_HEIGHT, TERRAIN_DEFINITIONS, UNIT_DEFINITIONS, axialDirections, CITY_HP, UNIT_VISION_RANGE, CITY_VISION_RANGE, BUY_INFLUENCE_TILE_COST, BASE_CITY_INCOME, INCOME_PER_INFLUENCE_LEVEL, UNIT_HEAL_AMOUNT, INITIAL_CITY_POPULATION, BUILDING_DEFINITIONS, STARVATION_DAMAGE, CAMP_DEFENSE_BONUS, BASE_CITY_FOOD_STORAGE, CAMP_INFLUENCE_RANGE, CAMP_VISION_RANGE, CAMP_BUILDING_DEFINITIONS, CAMP_XP_PER_TURN, CAMP_XP_PER_BUILDING_PROD_COST, CAMP_XP_PER_UNIT_PROD_COST, CAMP_XP_PER_NEW_MEMBER, INITIAL_XP_TO_NEXT_LEVEL, XP_LEVEL_MULTIPLIER, GATHERING_YIELD_PER_POINT, DISEASE_RISK_BASE, DISEASE_RISK_INCREASE_PER_TURN, DISEASE_RISK_DECREASE_PER_TURN, DISEASE_DAMAGE } from './constants';
+import { MAP_SIZES, MAP_WIDTH, MAP_HEIGHT, TERRAIN_DEFINITIONS, UNIT_DEFINITIONS, axialDirections, CITY_HP, UNIT_VISION_RANGE, CITY_VISION_RANGE, BUY_INFLUENCE_TILE_COST, BASE_CITY_INCOME, INCOME_PER_INFLUENCE_LEVEL, UNIT_HEAL_AMOUNT, INITIAL_CITY_POPULATION, BUILDING_DEFINITIONS, STARVATION_DAMAGE, CAMP_DEFENSE_BONUS, BASE_CITY_FOOD_STORAGE, CAMP_INFLUENCE_RANGE, CAMP_VISION_RANGE, CAMP_BUILDING_DEFINITIONS, CAMP_XP_PER_TURN, CAMP_XP_PER_BUILDING_PROD_COST, CAMP_XP_PER_UNIT_PROD_COST, CAMP_XP_PER_NEW_MEMBER, INITIAL_XP_TO_NEXT_LEVEL, XP_LEVEL_MULTIPLIER, GATHERING_YIELD_PER_POINT, DISEASE_RISK_BASE, DISEASE_RISK_INCREASE_PER_EXPOSURE, DISEASE_DAMAGE } from './constants';
 import { axialToString, stringToAxial, getHexesInRange, hexDistance, axialToPixel } from './utils/hexUtils';
 import { playSound, setVolume, setMuted, ensureAudioInitialized } from './utils/soundManager';
 import { TECH_TREE } from './techtree';
@@ -302,7 +302,7 @@ const App: React.FC = () => {
                     terrainType = TerrainType.Mountains;
                 }
                 
-                const hex: Hex = { q, r, terrain: terrainType, currentFood: 0, currentWood: 0, currentStone: 0, currentHides: 0, currentObsidian: 0, currentDiseaseRisk: 0 };
+                const hex: Hex = { q, r, terrain: terrainType, currentFood: 0, currentWood: 0, currentStone: 0, currentHides: 0, currentObsidian: 0 };
                 hexes.set(axialToString({ q, r }), hex);
             }
         }
@@ -446,7 +446,6 @@ const App: React.FC = () => {
             hex.currentStone = terrainDef.maxStone;
             hex.currentHides = terrainDef.maxHides;
             hex.currentObsidian = terrainDef.maxObsidian;
-            hex.currentDiseaseRisk = DISEASE_RISK_BASE[terrainDef.diseaseRisk];
         }
         
         return hexes;
@@ -1143,11 +1142,12 @@ const App: React.FC = () => {
                 }
             }
             
-            // 0.5 Reset wasStarving flag for current player's armies
+            // 0.5 Reset turn-based flags for current player's armies
             for (const hex of newGs.hexes.values()) {
                 const armyOnHex = hex.armyId ? newGs.armies.get(hex.armyId) : undefined;
                 if (armyOnHex && armyOnHex.ownerId === currentPlayerId) {
                     delete hex.wasStarving;
+                    delete hex.wasSick;
                 }
             }
             
@@ -1470,28 +1470,43 @@ const App: React.FC = () => {
             // 7.5 Disease Processing
             const sickUnitIds = new Set<string>();
             for (const hex of newGs.hexes.values()) {
-                const terrainDef = TERRAIN_DEFINITIONS[hex.terrain];
-                const baseRisk = DISEASE_RISK_BASE[terrainDef.diseaseRisk];
-                
                 const armyOnHex = hex.armyId ? newGs.armies.get(hex.armyId) : undefined;
-                
+
                 if (armyOnHex && armyOnHex.ownerId === currentPlayerId) {
-                    // Army is on the tile, increase risk and check for sickness
-                    hex.currentDiseaseRisk = Math.min(100, hex.currentDiseaseRisk + DISEASE_RISK_INCREASE_PER_TURN);
+                    // This player's army is on the tile, increment exposure
+                    hex.armyPresenceTurns = (hex.armyPresenceTurns || 0) + 1;
+
+                    const terrainDef = TERRAIN_DEFINITIONS[hex.terrain];
+                    const baseRisk = DISEASE_RISK_BASE[terrainDef.diseaseRisk];
                     
-                    const unitsInArmy = armyOnHex.unitIds.map(id => newGs.units.get(id)!);
-                    for (const unit of unitsInArmy) {
-                        if (Math.random() * 100 < hex.currentDiseaseRisk) {
-                            // Unit gets sick
-                            unit.hp -= DISEASE_DAMAGE;
-                            sickUnitIds.add(unit.id);
+                    let gracePeriod = 0;
+                    switch (terrainDef.diseaseRisk) {
+                        case 'Low': gracePeriod = 3; break;
+                        case 'Medium': gracePeriod = 2; break;
+                        case 'High': gracePeriod = 1; break;
+                    }
+                    
+                    const exposureTurnsAfterGrace = Math.max(0, hex.armyPresenceTurns - gracePeriod);
+
+                    if (exposureTurnsAfterGrace > 0) {
+                        const effectiveRisk = baseRisk + (exposureTurnsAfterGrace * DISEASE_RISK_INCREASE_PER_EXPOSURE);
+
+                        const unitsInArmy = armyOnHex.unitIds.map(id => newGs.units.get(id)!);
+                        let armyGotSick = false;
+                        for (const unit of unitsInArmy) {
+                            if (Math.random() * 100 < effectiveRisk) {
+                                unit.hp -= DISEASE_DAMAGE;
+                                sickUnitIds.add(unit.id);
+                                armyGotSick = true;
+                            }
+                        }
+                        if (armyGotSick) {
+                            hex.wasSick = true;
                         }
                     }
                 } else {
-                    // Tile is empty (or occupied by enemy of current player), risk decays
-                    if (hex.currentDiseaseRisk > baseRisk) {
-                        hex.currentDiseaseRisk = Math.max(baseRisk, hex.currentDiseaseRisk - DISEASE_RISK_DECREASE_PER_TURN);
-                    }
+                    // No friendly army on the tile, so reset the consecutive turn counter.
+                    hex.armyPresenceTurns = 0;
                 }
             }
 

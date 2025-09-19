@@ -1,7 +1,7 @@
 import React from 'react';
 import { HEX_SIZE, TERRAIN_DEFINITIONS, UNIT_DEFINITIONS, CITY_HP } from '../constants';
 import { Hex, Unit, City, Player, Army } from '../types';
-import { InfantryIcon, TankIcon, CityIcon, FoodIcon, PlusIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, CampIcon } from './Icons';
+import { InfantryIcon, TankIcon, CityIcon, FoodIcon, PlusIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, CampIcon, SicknessIcon } from './Icons';
 import { UnitType } from '../types';
 
 interface HexagonProps {
@@ -21,11 +21,12 @@ interface HexagonProps {
   isCampSelected?: boolean;
   isInPath: boolean;
   isStarving: boolean;
+  isSick: boolean;
   influenceBorderColor?: string;
   onClick: () => void;
 }
 
-const Hexagon: React.FC<HexagonProps> = ({ hex, army, unitsInArmy, city, player, isSelected, isExplored, isVisible, isReachable, isAttackable, isExpandable, isDeployable, isCampSelectable, isCampSelected, isInPath, isStarving, influenceBorderColor, onClick }) => {
+const Hexagon: React.FC<HexagonProps> = ({ hex, army, unitsInArmy, city, player, isSelected, isExplored, isVisible, isReachable, isAttackable, isExpandable, isDeployable, isCampSelectable, isCampSelected, isInPath, isStarving, isSick, influenceBorderColor, onClick }) => {
   const BORDER_OFFSET = 2;
   const CELL_SIZE = HEX_SIZE;
   const RENDER_SIZE = CELL_SIZE - BORDER_OFFSET;
@@ -143,6 +144,15 @@ const Hexagon: React.FC<HexagonProps> = ({ hex, army, unitsInArmy, city, player,
     )
   }
 
+  const renderSicknessIndicator = () => {
+    if (!isSick) return null;
+    return (
+        <div className="absolute bottom-0 -left-1 bg-purple-600 text-white rounded-full w-5 h-5 flex items-center justify-center border-2 border-black z-20" title="Sick">
+            <SicknessIcon className="w-3 h-3" />
+        </div>
+    )
+  }
+
   const ringColor = player ? player.color : '#FFFFFF';
 
   return (
@@ -194,6 +204,7 @@ const Hexagon: React.FC<HexagonProps> = ({ hex, army, unitsInArmy, city, player,
                   {renderHealthBar()}
                   {renderArmyBadge()}
                   {renderStarvationIndicator()}
+                  {renderSicknessIndicator()}
                   {isExpandable && <PlusIcon className="w-1/2 h-1/2 text-white opacity-70 drop-shadow-lg" />}
                 </div>
             </div>

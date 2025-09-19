@@ -54,6 +54,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameState, fogOfWarEnabled, visib
             const city = isVisible && hex.cityId ? gameState.cities.get(hex.cityId) : undefined;
             const player = getPlayerForHex(army, city);
             const isStarving = isVisible && !!hex.wasStarving && !!hex.armyId;
+            const isSick = isVisible && !!hex.wasSick && !!hex.armyId;
             const influenceBorderColor = influenceMap.get(hexKey);
             
             return (
@@ -75,6 +76,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ gameState, fogOfWarEnabled, visib
                 isCampSelected={campSelectedHexes.has(hexKey)}
                 isInPath={false} // Pathfinding visualization not implemented yet
                 isStarving={isStarving}
+                isSick={isSick}
                 influenceBorderColor={influenceBorderColor}
                 onClick={() => onHexClick({ q: hex.q, r: hex.r })}
               />

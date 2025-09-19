@@ -177,9 +177,6 @@ const GameUI: React.FC<GameUIProps> = ({ gameState, selectedHex, selectedUnitId,
 
   const renderHexInfo = (hex: Hex) => {
     const terrainDef = TERRAIN_DEFINITIONS[hex.terrain];
-    const riskColor = hex.currentDiseaseRisk > 50 ? '#ef4444'
-                    : hex.currentDiseaseRisk > 25 ? '#f59e0b'
-                    : '#86efac';
     return (
         <div>
             <h3 className="text-lg font-bold mb-2">{terrainDef.name}</h3>
@@ -224,10 +221,6 @@ const GameUI: React.FC<GameUIProps> = ({ gameState, selectedHex, selectedUnitId,
                  <div className="col-span-2 flex justify-between">
                     <span>Disease Risk:</span> 
                     <span className="font-semibold" style={{color: terrainDef.diseaseRisk === 'High' ? '#ef4444' : terrainDef.diseaseRisk === 'Medium' ? '#f59e0b' : '#86efac'}}>{terrainDef.diseaseRisk}</span>
-                </div>
-                 <div className="col-span-2 flex justify-between">
-                    <span>Current Risk:</span> 
-                    <span className="font-semibold" style={{color: riskColor}}>{Math.round(hex.currentDiseaseRisk)}%</span>
                 </div>
             </div>
         </div>
