@@ -81,6 +81,8 @@ export enum CampBuildingType {
     StoragePit = 'Storage Pit',
     FirePit = 'Fire Pit',
     DryingRack = 'Drying Rack',
+    HealersTent = "Healer's Tent",
+    Tent = 'Tent',
 }
 
 export interface BuildingDefinition {
@@ -107,7 +109,10 @@ export interface CampBuildingDefinition {
     foodStorageBonus?: number;
     researchBonus?: number;
     culturePointBonus?: number;
+    healingBonus?: number;
+    diseaseRiskReduction?: number;
     requiredTech?: string;
+    housingCapacity?: number;
 }
 
 export interface BuildQueueItem {
@@ -147,6 +152,16 @@ export interface Unit {
   gender: Gender;
 }
 
+export interface SicknessRiskDetails {
+    baseTerrain: number;
+    stagnation: number;
+    overcrowding: number;
+    // Reductions
+    healersTentReduction: number;
+    shamanFlatReduction: number;
+}
+
+
 export interface Army {
   id: string;
   ownerId: number;
@@ -163,6 +178,7 @@ export interface Army {
   level?: number;
   population?: number;
   buildings?: CampBuildingType[];
+  tentLevel?: number;
   buildQueue?: BuildQueueItem[];
   xp?: number;
   xpToNextLevel?: number;
@@ -177,6 +193,8 @@ export interface Army {
   storageCapacity: number;
   food?: number;
   foodStorageCapacity?: number;
+  sicknessRisk?: number; // Current percentage risk of disease
+  sicknessRiskDetails?: SicknessRiskDetails;
 }
 
 export interface City {
@@ -206,6 +224,8 @@ export interface City {
   isConnectedToNetwork: boolean;
   localResources: ResourceCost;
   storageCapacity: number;
+  sicknessRisk?: number;
+  sicknessRiskDetails?: SicknessRiskDetails;
 }
 
 export interface PlayerCulture {

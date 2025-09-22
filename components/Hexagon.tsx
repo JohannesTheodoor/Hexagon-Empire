@@ -214,4 +214,4 @@ const Hexagon: React.FC<HexagonProps> = ({ hex, army, unitsInArmy, city, player,
   );
 };
 
-export default Hexagon;
+export default React.memo(Hexagon);

@@ -3,8 +3,8 @@ import { GameState, AxialCoords, Unit, UnitType, Player, City, Army } from '../t
 import { axialToString } from '../utils/hexUtils';
 import { InfantryIcon, TankIcon, TribesmanIcon, TribeswomanIcon, PlusIcon, CampIcon, ChildIcon, ShamanIcon } from './Icons';
 import { UNIT_DEFINITIONS } from '../constants';
+import { useGameStore } from '../store/gameStore';
 
-// Group units by type and HP to stack them in the UI.
 const groupUnits = (units: Unit[]): { representative: Unit, units: Unit[], count: number }[] => {
   if (!units.length) return [];
   
@@ -25,7 +25,6 @@ const groupUnits = (units: Unit[]): { representative: Unit, units: Unit[], count
   return Array.from(groups.values());
 };
 
-// A smaller, icon-focused card for the army bar.
 const UnitIconCard: React.FC<{
     unit: Unit;
     count: number;
@@ -83,7 +82,6 @@ const UnitIconCard: React.FC<{
 
 
 interface ArmyBarProps {
-    gameState: GameState;
     selectedHex: AxialCoords | null;
     selectedUnitId: string | null;
     selectedArmyId: string | null;
@@ -92,7 +90,11 @@ interface ArmyBarProps {
     onToggleCamp: (armyId: string) => void;
 }
 
-const ArmyBar: React.FC<ArmyBarProps> = ({ gameState, selectedHex, selectedUnitId, selectedArmyId, onSelectUnit, onStartFormArmy, onToggleCamp }) => {
+const ArmyBar: React.FC<ArmyBarProps> = ({ selectedHex, selectedUnitId, selectedArmyId, onSelectUnit, onStartFormArmy, onToggleCamp }) => {
+    const gameState = useGameStore(state => state.gameState);
+    
+    if (!gameState) return null;
+
     const army = selectedArmyId ? gameState.armies.get(selectedArmyId) : null;
     const cityOnHex = selectedHex ? gameState.cities.get(gameState.hexes.get(axialToString(selectedHex))?.cityId ?? '') : null;
     
@@ -116,7 +118,6 @@ const ArmyBar: React.FC<ArmyBarProps> = ({ gameState, selectedHex, selectedUnitI
 
     const groupedUnits = groupUnits(unitsToShow);
 
-    // A stack is "selected" if the currently selected unit ID belongs to any unit in that stack.
     const isStackSelected = (group: { units: Unit[] }) => {
         if (!selectedUnitId) return false;
         return group.units.some(u => u.id === selectedUnitId);
@@ -130,7 +131,7 @@ const ArmyBar: React.FC<ArmyBarProps> = ({ gameState, selectedHex, selectedUnitI
     return (
         <div 
             className="absolute bottom-0 left-0 right-0 h-32 bg-gray-900 bg-opacity-80 backdrop-blur-sm p-2 flex items-center justify-center gap-2 z-30 border-t-2 border-gray-700"
-            onMouseDown={(e) => e.stopPropagation()} // Prevent map panning when interacting with the bar
+            onMouseDown={(e) => e.stopPropagation()}
         >
             <div className="flex-shrink-0 flex flex-col gap-1">
                 {(showFormArmyButton || showSplitArmyButton) && (

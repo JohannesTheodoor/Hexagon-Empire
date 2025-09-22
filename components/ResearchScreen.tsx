@@ -1,19 +1,19 @@
-
 import React, { useRef, useLayoutEffect, useState, useMemo } from 'react';
 import { GameState, Technology } from '../types';
-import { CloseIcon, ResearchIcon, FoodIcon, MiningIcon, BuildingIcon, ForgingIcon, FishingIcon, SailingIcon, MountaineeringIcon, FireMasteryIcon, SimpleStorageIcon } from './Icons';
+import { CloseIcon, ResearchIcon, FoodIcon, MiningIcon, BuildingIcon, ForgingIcon, FishingIcon, SailingIcon, MountaineeringIcon, FireMasteryIcon, SimpleStorageIcon, HerbalLoreIcon } from './Icons';
 import { TECH_TREE } from '../techtree';
+import { useGameStore } from '../store/gameStore';
+import { playSound } from '../utils/soundManager';
 
 interface ResearchScreenProps {
-  gameState: GameState;
   onClose: () => void;
-  onSetResearch: (techId: string) => void;
 }
 
 const TechIcon: React.FC<{ techId: string; className?: string }> = ({ techId, className }) => {
     switch(techId) {
         case 'fire_mastery': return <FireMasteryIcon className={className} />;
         case 'simple_storage': return <SimpleStorageIcon className={className} />;
+        case 'herbal_lore': return <HerbalLoreIcon className={className} />;
         case 'agriculture': return <FoodIcon className={className} />;
         case 'mining': return <MiningIcon className={className} />;
         case 'construction': return <BuildingIcon className={className} />;
@@ -94,11 +94,14 @@ const TechNode = React.forwardRef<HTMLDivElement, TechNodeProps>(({ tech, isUnlo
 });
 
 
-const ResearchScreen: React.FC<ResearchScreenProps> = ({ gameState, onClose, onSetResearch }) => {
-  const player = gameState.players.find(p => p.id === gameState.currentPlayerId);
+const ResearchScreen: React.FC<ResearchScreenProps> = ({ onClose }) => {
+  const gameState = useGameStore(state => state.gameState);
+  const setResearch = useGameStore(state => state.setResearch);
   const containerRef = useRef<HTMLDivElement>(null);
   const nodeRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
   const [lines, setLines] = useState<{key: string, x1: number, y1: number, x2: number, y2: number, isUnlocked: boolean}[]>([]);
+
+  const player = gameState?.players.find(p => p.id === gameState.currentPlayerId);
 
   const techTiers = useMemo(() => {
     const tiers: Technology[][] = [];
@@ -113,7 +116,6 @@ const ResearchScreen: React.FC<ResearchScreenProps> = ({ gameState, onClose, onS
 
   useLayoutEffect(() => {
     if (!containerRef.current) return;
-    const containerRect = containerRef.current.getBoundingClientRect();
     const newLines: typeof lines = [];
     
     for (const tech of Object.values(TECH_TREE)) {
@@ -121,17 +123,15 @@ const ResearchScreen: React.FC<ResearchScreenProps> = ({ gameState, onClose, onS
             const childNode = nodeRefs.current.get(tech.id);
             if (!childNode) continue;
             
-            const childRect = childNode.getBoundingClientRect();
-            const childX = childNode.offsetLeft + childRect.width / 2;
-            const childY = childNode.offsetTop + childRect.height / 2;
+            const childX = childNode.offsetLeft + childNode.offsetWidth / 2;
+            const childY = childNode.offsetTop + childNode.offsetHeight / 2;
             
             for (const prereqId of tech.prerequisites) {
                 const parentNode = nodeRefs.current.get(prereqId);
                 if (!parentNode) continue;
 
-                const parentRect = parentNode.getBoundingClientRect();
-                const parentX = parentNode.offsetLeft + parentRect.width / 2;
-                const parentY = parentNode.offsetTop + parentRect.height / 2;
+                const parentX = parentNode.offsetLeft + parentNode.offsetWidth / 2;
+                const parentY = parentNode.offsetTop + parentNode.offsetHeight / 2;
                 
                 newLines.push({
                     key: `${prereqId}-${tech.id}`,
@@ -147,8 +147,14 @@ const ResearchScreen: React.FC<ResearchScreenProps> = ({ gameState, onClose, onS
     setLines(newLines);
   }, [techTiers, player?.unlockedTechs]);
   
+  const handleSetResearch = (techId: string) => {
+    if (!gameState) return;
+    playSound('build');
+    setResearch({ techId });
+    onClose();
+  };
 
-  if (!player) return null;
+  if (!gameState || !player) return null;
 
   return (
     <div 
@@ -212,7 +218,6 @@ const ResearchScreen: React.FC<ResearchScreenProps> = ({ gameState, onClose, onS
 
                             return (
                                 <TechNode
-                                    // FIX: The ref callback was returning a value, which is not allowed. Wrapped in braces to ensure it returns undefined.
                                     ref={node => { nodeRefs.current.set(tech.id, node); }}
                                     key={tech.id}
                                     tech={tech}
@@ -220,7 +225,7 @@ const ResearchScreen: React.FC<ResearchScreenProps> = ({ gameState, onClose, onS
                                     canSelect={canSelect}
                                     isCurrentResearch={isCurrentResearch}
                                     researchProgress={isCurrentResearch ? player.researchProgress : 0}
-                                    onSelect={() => onSetResearch(tech.id)}
+                                    onSelect={() => handleSetResearch(tech.id)}
                                 />
                             )
                         })}

@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { GameState, Unit, UnitType, Army } from '../types';
 import { CloseIcon, InfantryIcon, TankIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon } from './Icons';
+import { useGameStore } from '../store/gameStore';
 
 interface CreateArmyScreenProps {
-  gameState: GameState;
   sourceId: string;
   sourceType: 'city' | 'army';
   onClose: () => void;
@@ -51,10 +51,12 @@ const UnitQuantitySelector: React.FC<{
     );
 };
 
-const CreateArmyScreen: React.FC<CreateArmyScreenProps> = ({ gameState, sourceId, sourceType, onClose, onConfirmFormation }) => {
+const CreateArmyScreen: React.FC<CreateArmyScreenProps> = ({ sourceId, sourceType, onClose, onConfirmFormation }) => {
+  const gameState = useGameStore(state => state.gameState);
   const [unitsToMove, setUnitsToMove] = useState<Map<UnitType, number>>(new Map());
 
   const { availableUnitsGrouped, sourceName } = useMemo(() => {
+    if (!gameState) return { availableUnitsGrouped: new Map(), sourceName: '' };
     let units: Unit[] = [];
     let name = '';
     if (sourceType === 'city') {
@@ -77,7 +79,8 @@ const CreateArmyScreen: React.FC<CreateArmyScreenProps> = ({ gameState, sourceId
     setUnitsToMove(prev => new Map(prev).set(unitType, newCount));
   };
 
-  const totalUnitsToMove = Array.from(unitsToMove.values()).reduce((a, b) => a + b, 0);
+  // FIX: Explicitly type the parameters of the reduce function to prevent them from being inferred as 'unknown'.
+  const totalUnitsToMove = Array.from(unitsToMove.values()).reduce((a: number, b: number) => a + b, 0);
 
   const handleConfirm = () => {
     const unitsToMoveArray = Array.from(unitsToMove.entries())

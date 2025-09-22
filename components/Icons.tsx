@@ -135,7 +135,7 @@ export const MarketplaceIcon: React.FC<{ className?: string }> = ({ className })
 
 export const GranaryIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-        <path d="M20 6h-3V4c0-1.1-.9-2-2-2H9c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-5-2h-2v2h2V4zM4 19V8h16v11H4z" />
+        <path d="M20 6h-3V4c0-1.1-.9-2-2-2H9c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2zM-5-2h-2v2h2V4zM4 19V8h16v11H4z" />
     </svg>
 );
 
@@ -231,7 +231,7 @@ export const FireMasteryIcon: React.FC<{ className?: string }> = ({ className })
 
 export const SimpleStorageIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-        <path d="M20 6h-3V4c0-1.1-.9-2-2-2H9c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zM9 4h6v2H9V4zm11 15H4V8h16v11z"/>
+        <path d="M20 6h-3V4c0-1.1-.9-2-2-2H9c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2zM9 4h6v2H9V4zm11 15H4V8h16v11z"/>
     </svg>
 );
 
@@ -243,7 +243,7 @@ export const DryingRackIcon: React.FC<{ className?: string }> = ({ className }) 
 
 export const SailingIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-        <path d="M14 6l-1 5H9.78C10.33 10.37 11.1 10 12 10c1.1 0 2 .9 2 2zm8-4H2C.9 2 0 2.9 0 4v12c0 1.1.9 2 2 2h15l-1.1-3.11c-.93-2.61.55-5.46 3.1-6.4L22 7V4c0-1.1-.9-2-2-2z"/>
+        <path d="M14 6l-1 5H9.78C10.33 10.37 11.1 10 12 10c1.1 0 2 .9 2 2zm8-4H2C.9 2 0 2.9 0 4v12c0 1.1.9 2 2 2h15l-1.1-3.11c-.93-2.61.55-5.46 3.1-6.4L22 7V4c0-1.1-.9-2-2z"/>
     </svg>
 );
 
@@ -256,5 +256,29 @@ export const MountaineeringIcon: React.FC<{ className?: string }> = ({ className
 export const SicknessIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
         <path d="M16 7h-2.2c-.5-1.4-1.8-2.5-3.4-2.5C8.6 4.5 7.3 5.6 6.8 7H4.5C4.2 7 4 7.2 4 7.5S4.2 8 4.5 8h2.3c.4 1 .9 1.8 1.5 2.4V11H7.5c-.3 0-.5.2-.5.5s.2.5.5.5h1.3v.6c-.9.5-1.6 1.4-2 2.4H4.5c-.3 0-.5.2-.5.5s.2.5.5.5h2.2c.5 1.4 1.8 2.5 3.4 2.5 1.8 0 3.2-1.3 3.4-3h2.2c.3 0 .5-.2.5-.5s-.2-.5-.5-.5h-2.2c-.5-1.4-1.8-2.5-3.4-2.5-.9 0-1.8.4-2.4 1.1v-1.2h1.2c.3 0 .5-.2.5-.5s-.2-.5-.5-.5H9.7v-.6c.9-.5 1.6-1.4 2-2.4h2.2c.3 0 .5-.2.5-.5S16.3 7 16 7zM12 17c-1 0-1.9-.5-2.4-1.3h4.8c-.5.8-1.4 1.3-2.4 1.3zm0-6c-.6 0-1-.4-1-1s.4-1 1-1 1 .4 1 1-.4 1-1 1zm-2.4-2.7h4.8c-.5-.8-1.4-1.3-2.4-1.3s-1.9.5-2.4 1.3z"/>
+    </svg>
+);
+
+export const HerbalLoreIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M20.5 11c-2.2 0-4.1-1.3-5-3.1-1.1 1.8-3.1 3.1-5.5 3.1-2.4 0-4.4-1.3-5.5-3.1C3.6 9.7 1.8 11 0 11v2c1.8 0 3.6-1.3 4.5-3.1 1.1 1.8 3.1 3.1 5.5 3.1s4.4-1.3 5.5-3.1c.9 1.8 2.7 3.1 4.5 3.1v-2zM12 15c-2.4 0-4.4-1.3-5.5-3.1C5.6 13.7 3.8 15 2 15v2c1.8 0 3.6-1.3 4.5-3.1 1.1 1.8 3.1 3.1 5.5 3.1s4.4-1.3 5.5-3.1c.9 1.8 2.7 3.1 4.5 3.1v-2c-1.8 0-3.6-1.3-4.5-3.1C16.4 13.7 14.4 15 12 15z"/>
+    </svg>
+);
+
+export const HealersTentIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M12 3L2 21h4l6-10 6 10h4L12 3zm-1 11h2v-2h2v-2h-2V8h-2v2H9v2h2v2z"/>
+    </svg>
+);
+
+export const TentIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M12 3L4 21h16L12 3zm0 2.5l5.5 13.5H6.5L12 5.5z"/>
+    </svg>
+);
+
+export const UsersIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
     </svg>
 );

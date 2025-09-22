@@ -2,9 +2,9 @@ import React from 'react';
 import { GameState, CulturalAspect, CultureAxis } from '../types';
 import { CloseIcon, CultureIcon } from './Icons';
 import { CULTURAL_ASPECTS } from '../culture';
+import { useGameStore } from '../store/gameStore';
 
 interface CultureScreenProps {
-  gameState: GameState;
   onClose: () => void;
 }
 
@@ -46,10 +46,11 @@ const AspectCard: React.FC<{ aspect: CulturalAspect; isUnlocked: boolean; }> = (
 );
 
 
-const CultureScreen: React.FC<CultureScreenProps> = ({ gameState, onClose }) => {
-    const player = gameState.players.find(p => p.id === gameState.currentPlayerId);
+const CultureScreen: React.FC<CultureScreenProps> = ({ onClose }) => {
+    const gameState = useGameStore(state => state.gameState);
+    const player = gameState?.players.find(p => p.id === gameState.currentPlayerId);
 
-    if (!player) return null;
+    if (!gameState || !player) return null;
 
     return (
         <div 

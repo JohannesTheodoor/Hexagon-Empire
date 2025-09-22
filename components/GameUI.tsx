@@ -1,19 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { GameState, AxialCoords, UnitType, Unit, City, Army, Hex } from '../types';
-import { TERRAIN_DEFINITIONS, UNIT_DEFINITIONS, BUY_INFLUENCE_TILE_COST, BUILDING_DEFINITIONS, BASE_CITY_INCOME, INCOME_PER_INFLUENCE_LEVEL, BASE_CITY_FOOD_STORAGE } from '../constants';
+import { GameState, AxialCoords, UnitType, Unit, City, Army, Hex, CampBuildingType } from '../types';
+import { TERRAIN_DEFINITIONS, UNIT_DEFINITIONS, BUY_INFLUENCE_TILE_COST, BUILDING_DEFINITIONS, BASE_CITY_INCOME, INCOME_PER_INFLUENCE_LEVEL, BASE_CITY_FOOD_STORAGE, CAMP_BUILDING_DEFINITIONS } from '../constants';
 import { axialToString } from '../utils/hexUtils';
-import { InfluenceIcon, BuildingIcon, ResearchIcon, FoodIcon, ArrowUpIcon, ArrowDownIcon, CultureIcon, WoodIcon, StoneIcon, HidesIcon, ObsidianIcon } from './Icons';
+import { InfluenceIcon, BuildingIcon, ResearchIcon, FoodIcon, ArrowUpIcon, ArrowDownIcon, CultureIcon, WoodIcon, StoneIcon, HidesIcon, ObsidianIcon, SicknessIcon } from './Icons';
 import { TECH_TREE } from '../techtree';
+import { useGameStore } from '../store/gameStore';
 
 interface GameUIProps {
-  gameState: GameState;
   selectedHex: AxialCoords | null;
   selectedUnitId: string | null;
   selectedArmyId: string | null;
-  projectedIncome: number;
-  totalPlayerResources: { wood: number; stone: number; hides: number; obsidian: number };
   campTileSelectionInfo: { armyId: string; totalTiles: number; selectedTiles: Set<string> } | null;
-  onEndTurn: () => void;
   onBuyInfluenceTile: (cityId: string) => void;
   onOpenSelectionScreen: () => void;
   onOpenResearchScreen: () => void;
@@ -21,15 +18,73 @@ interface GameUIProps {
   isAITurning: boolean;
 }
 
-const GameUI: React.FC<GameUIProps> = ({ gameState, selectedHex, selectedUnitId, selectedArmyId, projectedIncome, totalPlayerResources, campTileSelectionInfo, onEndTurn, onBuyInfluenceTile, onOpenSelectionScreen, onOpenResearchScreen, onOpenCultureScreen, isAITurning }) => {
+const calculateIncome = (playerId: number, gs: GameState): number => {
+    let income = 0;
+    const player = gs.players.find(p => p.id === playerId);
+    if (!player) return 0;
+    
+    for (const city of gs.cities.values()) {
+        if (city.ownerId === playerId) {
+            income += BASE_CITY_INCOME + (city.controlledTiles.length - 1) * INCOME_PER_INFLUENCE_LEVEL;
+            for (const buildingType of city.buildings) {
+                income += BUILDING_DEFINITIONS[buildingType].goldBonus ?? 0;
+            }
+        }
+    }
+    return income;
+};
+
+const SicknessDetailsPanel: React.FC<{ details: Army['sicknessRiskDetails'], sickUnitCount: number, totalUnitCount: number }> = ({ details, sickUnitCount, totalUnitCount }) => {
+    if (!details) return null;
+    return (
+        <div className="pl-4 pt-1 space-y-1 text-xs text-gray-300 border-l-2 border-gray-600 ml-2">
+            <div className="flex justify-between"><span>Affected Units:</span> <span className="font-semibold text-purple-400">{sickUnitCount} / {totalUnitCount}</span></div>
+            <div className="flex justify-between"><span>Base (Terrain):</span> <span className="font-semibold text-orange-400">+{details.baseTerrain.toFixed(1)}%</span></div>
+            {details.stagnation > 0 && <div className="flex justify-between"><span>Stagnation:</span> <span className="font-semibold text-orange-400">+{details.stagnation.toFixed(1)}%</span></div>}
+            {details.overcrowding > 0 && <div className="flex justify-between"><span>Overcrowding:</span> <span className="font-semibold text-orange-400">+{details.overcrowding.toFixed(1)}%</span></div>}
+            {details.healersTentReduction > 0 && <div className="flex justify-between"><span>Healer's Tent:</span> <span className="font-semibold text-green-400">-{details.healersTentReduction.toFixed(1)}%</span></div>}
+            {details.shamanFlatReduction > 0 && <div className="flex justify-between"><span>Shaman's Influence:</span> <span className="font-semibold text-green-400">-{details.shamanFlatReduction.toFixed(1)}%</span></div>}
+        </div>
+    );
+};
+
+
+const GameUI: React.FC<GameUIProps> = ({ selectedHex, selectedUnitId, selectedArmyId, campTileSelectionInfo, onBuyInfluenceTile, onOpenSelectionScreen, onOpenResearchScreen, onOpenCultureScreen, isAITurning }) => {
+  const gameState = useGameStore(state => state.gameState);
+  const onEndTurn = useGameStore(state => state.endTurn);
   const [isFoodDetailsExpanded, setIsFoodDetailsExpanded] = useState(false);
-  const currentPlayer = gameState.players.find(p => p.id === gameState.currentPlayerId);
+  const [isSicknessDetailsExpanded, setIsSicknessDetailsExpanded] = useState(false);
   
   useEffect(() => {
     setIsFoodDetailsExpanded(false);
+    setIsSicknessDetailsExpanded(false);
   }, [selectedArmyId]);
 
+  if (!gameState) return null;
+
+  const currentPlayer = gameState.players.find(p => p.id === gameState.currentPlayerId);
   if (!currentPlayer) return null;
+
+  const projectedIncome = calculateIncome(currentPlayer.id, gameState);
+
+  const totalPlayerResources = { wood: 0, stone: 0, hides: 0, obsidian: 0 };
+    const currentPlayerId = gameState.currentPlayerId;
+    for (const city of gameState.cities.values()) {
+        if (city.ownerId === currentPlayerId && city.isConnectedToNetwork) {
+            totalPlayerResources.wood += city.localResources.wood ?? 0;
+            totalPlayerResources.stone += city.localResources.stone ?? 0;
+            totalPlayerResources.hides += city.localResources.hides ?? 0;
+            totalPlayerResources.obsidian += city.localResources.obsidian ?? 0;
+        }
+    }
+     for (const army of gameState.armies.values()) {
+        if (army.ownerId === currentPlayerId && army.isCamped && army.isConnectedToNetwork) {
+            totalPlayerResources.wood += army.localResources.wood ?? 0;
+            totalPlayerResources.stone += army.localResources.stone ?? 0;
+            totalPlayerResources.hides += army.localResources.hides ?? 0;
+            totalPlayerResources.obsidian += army.localResources.obsidian ?? 0;
+        }
+    }
 
   const hexKey = selectedHex ? axialToString(selectedHex) : null;
   const hex = hexKey ? gameState.hexes.get(hexKey) : null;
@@ -74,16 +129,38 @@ const GameUI: React.FC<GameUIProps> = ({ gameState, selectedHex, selectedUnitId,
 
   const renderArmyInfo = (army: Army) => {
     const unitsInArmy = army.unitIds.map(id => gameState.units.get(id)!);
-    const totalFoodStored = unitsInArmy.reduce((sum, u) => sum + u.foodStored, 0);
-    const totalFoodCarryCapacity = unitsInArmy.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].foodCarryCapacity, 0);
+
+    const totalUnitFoodStored = unitsInArmy.reduce((sum, u) => sum + u.foodStored, 0);
+    const totalFoodStored = army.isCamped ? (army.food ?? 0) + totalUnitFoodStored : totalUnitFoodStored;
+
+    const totalUnitFoodCapacity = unitsInArmy.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].foodCarryCapacity, 0);
+    const totalFoodCarryCapacity = army.isCamped ? (army.foodStorageCapacity ?? 0) + totalUnitFoodCapacity : totalUnitFoodCapacity;
+
     const totalConsumption = unitsInArmy.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].foodConsumption, 0);
     
-    const armyHex = gameState.hexes.get(axialToString(army.position));
-    const hexFood = armyHex?.currentFood ?? 0;
-    const totalGatherRate = unitsInArmy.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].foodGatherRate, 0);
-    const foodToGather = Math.min(hexFood, totalGatherRate);
+    let availableFoodOnTerritory = 0;
+    if (army.isCamped && army.controlledTiles) {
+        availableFoodOnTerritory = army.controlledTiles.reduce((sum, key) => {
+            const hex = gameState.hexes.get(key);
+            return sum + (hex?.currentFood ?? 0);
+        }, 0);
+    } else {
+        const armyHex = gameState.hexes.get(axialToString(army.position));
+        availableFoodOnTerritory = armyHex?.currentFood ?? 0;
+    }
+
+    let totalGatherRate = unitsInArmy.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].foodGatherRate, 0);
+    if (army.isCamped && army.buildings?.includes(CampBuildingType.ForagingPost)) {
+        totalGatherRate += CAMP_BUILDING_DEFINITIONS[CampBuildingType.ForagingPost].foodGatherBonus ?? 0;
+    }
+    
+    const foodToGather = Math.min(availableFoodOnTerritory, totalGatherRate);
     const netFood = foodToGather - totalConsumption;
     const netColor = netFood >= 0 ? 'text-green-400' : 'text-red-400';
+    
+    const risk = army.sicknessRisk ?? 0;
+    const riskColor = risk > 50 ? 'bg-red-500' : risk > 20 ? 'bg-yellow-500' : 'bg-green-500';
+    const sickUnitCount = unitsInArmy.filter(u => u.hp < UNIT_DEFINITIONS[u.type].maxHp).length;
 
     return (
         <div>
@@ -104,18 +181,37 @@ const GameUI: React.FC<GameUIProps> = ({ gameState, selectedHex, selectedUnitId,
                         <span className="font-bold">Food Supply</span>
                     </div>
                     <span className="font-semibold">
-                        {totalFoodStored} / {totalFoodCarryCapacity}
+                        {Math.floor(totalFoodStored)} / {totalFoodCarryCapacity}
                     </span>
                 </button>
 
                 {isFoodDetailsExpanded && (
                     <div id="food-details-panel" className="pl-4 pt-1 space-y-1 text-xs text-gray-300 border-l-2 border-gray-600 ml-2">
-                        <div className="flex justify-between"><span>On Territory:</span> <span className="font-semibold">{hexFood}</span></div>
-                        <div className="flex justify-between"><span>Gathering / turn:</span> <span className="font-semibold text-green-400">+{foodToGather}</span></div>
+                        <div className="flex justify-between"><span>On Territory:</span> <span className="font-semibold">{Math.floor(availableFoodOnTerritory)}</span></div>
+                        <div className="flex justify-between"><span>Gathering / turn:</span> <span className="font-semibold text-green-400">+{Math.round(foodToGather)}</span></div>
                         <div className="flex justify-between"><span>Consumption / turn:</span> <span className="font-semibold text-orange-400">-{totalConsumption}</span></div>
-                        <div className="flex justify-between font-bold text-sm"><span>Net / turn:</span> <span className={netFood >= 0 ? 'text-green-500' : 'text-red-500'}>{netFood >= 0 ? '+' : ''}{netFood}</span></div>
+                        <div className="flex justify-between font-bold text-sm"><span>Net / turn:</span> <span className={netFood >= 0 ? 'text-green-500' : 'text-red-500'}>{netFood >= 0 ? '+' : ''}{Math.round(netFood)}</span></div>
                     </div>
                 )}
+            </div>
+             <div className="mt-2 pt-2 border-t border-gray-600 space-y-1 text-sm">
+                 <button
+                    onClick={() => setIsSicknessDetailsExpanded(prev => !prev)}
+                    className="w-full flex justify-between items-center text-left p-1 -mx-1 rounded hover:bg-white/10 transition-colors"
+                    aria-expanded={isSicknessDetailsExpanded}
+                    aria-controls="sickness-details-panel"
+                >
+                    <span className="flex items-center gap-1.5 font-bold">
+                        <SicknessIcon className="w-4 h-4 text-purple-400" />
+                        Sickness Risk
+                    </span>
+                    <span className="font-semibold">{Math.round(risk)}%</span>
+                </button>
+
+                 <div className="w-full h-1.5 bg-gray-900 rounded-full overflow-hidden border border-black">
+                    <div className={`${riskColor} h-full rounded-full`} style={{ width: `${risk}%` }}></div>
+                </div>
+                 {isSicknessDetailsExpanded && <SicknessDetailsPanel details={army.sicknessRiskDetails} sickUnitCount={sickUnitCount} totalUnitCount={army.unitIds.length} />}
             </div>
             {army.isCamped && army.ownerId === currentPlayer.id && (
                  <div className="mt-2 pt-2 border-t border-gray-600">
@@ -183,7 +279,7 @@ const GameUI: React.FC<GameUIProps> = ({ gameState, selectedHex, selectedUnitId,
              <div className="space-y-1 text-sm grid grid-cols-2 gap-x-4">
                 <div className="flex justify-between">
                     <span className="flex items-center gap-1.5"><FoodIcon className="w-4 h-4 text-green-300" /> Food:</span> 
-                    <span className="font-semibold">{hex.currentFood}/{terrainDef.maxFood}</span>
+                    <span className="font-semibold">{Math.floor(hex.currentFood)}/{terrainDef.maxFood}</span>
                 </div>
                  <div className="flex justify-between">
                     <span>Regrowth:</span> 
@@ -191,7 +287,7 @@ const GameUI: React.FC<GameUIProps> = ({ gameState, selectedHex, selectedUnitId,
                 </div>
                  <div className="flex justify-between">
                     <span className="flex items-center gap-1.5"><WoodIcon className="w-4 h-4 text-yellow-700" /> Wood:</span> 
-                    <span className="font-semibold">{hex.currentWood}/{terrainDef.maxWood}</span>
+                    <span className="font-semibold">{Math.floor(hex.currentWood)}/{terrainDef.maxWood}</span>
                 </div>
                  <div className="flex justify-between">
                     <span>Regrowth:</span> 
@@ -199,11 +295,11 @@ const GameUI: React.FC<GameUIProps> = ({ gameState, selectedHex, selectedUnitId,
                 </div>
                 <div className="flex justify-between">
                     <span className="flex items-center gap-1.5"><StoneIcon className="w-4 h-4 text-gray-400" /> Stone:</span> 
-                    <span className="font-semibold">{hex.currentStone}/{terrainDef.maxStone}</span>
+                    <span className="font-semibold">{Math.floor(hex.currentStone)}/{terrainDef.maxStone}</span>
                 </div>
                  <div className="flex justify-between">
                     <span className="flex items-center gap-1.5"><HidesIcon className="w-4 h-4 text-orange-400" /> Hides:</span> 
-                    <span className="font-semibold">{hex.currentHides}/{terrainDef.maxHides}</span>
+                    <span className="font-semibold">{Math.floor(hex.currentHides)}/{terrainDef.maxHides}</span>
                 </div>
                 <div className="flex justify-between col-start-2">
                     <span>Regrowth:</span> 
@@ -211,7 +307,7 @@ const GameUI: React.FC<GameUIProps> = ({ gameState, selectedHex, selectedUnitId,
                 </div>
                 <div className="flex justify-between">
                     <span className="flex items-center gap-1.5"><ObsidianIcon className="w-4 h-4 text-purple-400" /> Obsidian:</span> 
-                    <span className="font-semibold">{hex.currentObsidian}/{terrainDef.maxObsidian}</span>
+                    <span className="font-semibold">{Math.floor(hex.currentObsidian)}/{terrainDef.maxObsidian}</span>
                 </div>
 
                 <div className="col-span-2 pt-2 mt-1 border-t border-gray-600 flex justify-between">

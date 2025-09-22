@@ -42,7 +42,8 @@ const InfluenceBorders: React.FC<InfluenceBordersProps> = ({ gameState }) => {
 
   for (const city of gameState.cities.values()) {
     // FIX: Use city.controlledTiles instead of the non-existent city.influenceRadius property.
-    const influenceSet = new Set(city.controlledTiles);
+    // FIX: Cast city.controlledTiles to string[] as its type is inferred as 'unknown' after state cloning.
+    const influenceSet = new Set(city.controlledTiles as string[]);
 
     for (const hexKey of influenceSet) {
       if (!gameState.hexes.has(hexKey)) continue;

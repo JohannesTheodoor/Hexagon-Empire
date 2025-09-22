@@ -28,7 +28,7 @@ export const CAMP_XP_PER_BUILDING_PROD_COST = 0.5; // 50% of production cost as 
 export const CAMP_XP_PER_UNIT_PROD_COST = 0.25; // 25% of production cost as XP
 export const CAMP_XP_PER_NEW_MEMBER = 20; // XP for merging or reproduction
 export const INITIAL_XP_TO_NEXT_LEVEL = 150; // XP needed for Lvl 1 -> Lvl 2
-export const XP_LEVEL_MULTIPLIER = 1.5; // Each level costs 1.5x the previous
+export const XP_LEVEL_MULTIPLIER = 2; // Each level costs 2x the previous
 
 
 export const BASE_CITY_INCOME = 5;
@@ -40,10 +40,15 @@ export const STARVATION_DAMAGE = 1;
 // Disease Constants
 export const DISEASE_RISK_BASE: Record<'Low' | 'Medium' | 'High', number> = {
   Low: 5,
-  Medium: 10,
-  High: 20,
+  Medium: 15,
+  High: 30,
 };
-export const DISEASE_RISK_INCREASE_PER_EXPOSURE = 3;
+export const DISEASE_STAGNATION_INCREASE_PER_TURN = 5;
+export const DISEASE_OVERCROWDING_THRESHOLD = 5;
+export const DISEASE_OVERCROWDING_RISK_PER_UNIT = 1;
+export const SHAMAN_RISK_REDUCTION_FLAT = 1;
+export const MAX_SHAMAN_FLAT_REDUCTION = 5;
+
 export const DISEASE_DAMAGE = 1;
 
 export const TERRAIN_DEFINITIONS: Record<TerrainType, TerrainDefinition> = {
@@ -90,10 +95,10 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
         productionYield: 0, carryCapacity: 0, foodCarryCapacity: 0, researchYield: 0, healingBonus: 0
     },
     [UnitType.Shaman]: {
-        movement: 1, cost: { gold: 15, obsidian: 2 }, productionCost: 400, attack: 1, defense: 2, maxHp: 8,
+        movement: 1, cost: { wood: 1, hides: 2, obsidian: 1 }, productionCost: 100, attack: 1, defense: 2, maxHp: 8,
         size: UnitSize.Small, foodGatherRate: 0, foodConsumption: 2,
-        productionYield: 0, carryCapacity: 1, foodCarryCapacity: 2, researchYield: 2, healingBonus: 1,
-        gender: Gender.Male,
+        productionYield: 0, carryCapacity: 1, foodCarryCapacity: 2, researchYield: 1, healingBonus: 1,
+        gender: Gender.Male, requiredTech: 'herbal_lore',
     }
 };
 
@@ -109,6 +114,8 @@ export const CAMP_BUILDING_DEFINITIONS: Record<CampBuildingType, CampBuildingDef
     [CampBuildingType.ForagingPost]: { name: 'Foraging Post', description: '+5 Food gathering per turn from this tile.', cost: { wood: 60 }, productionCost: 600, foodGatherBonus: 5 },
     [CampBuildingType.StoragePit]: { name: 'Storage Pit', description: '+50 resource storage capacity.', cost: { wood: 10, stone: 5, hides: 2 }, productionCost: 15, storageBonus: 50, requiredTech: 'simple_storage' },
     [CampBuildingType.DryingRack]: { name: 'Drying Rack', description: 'Increases camp food storage by 10.', cost: { wood: 8 }, productionCost: 18, foodStorageBonus: 10, requiredTech: 'simple_storage' },
+    [CampBuildingType.HealersTent]: { name: "Healer's Tent", description: 'Provides advanced care, increasing unit healing by +1 HP/turn and reducing camp disease risk by 10%.', cost: { wood: 6, hides: 6, obsidian: 2 }, productionCost: 100, healingBonus: 1, diseaseRiskReduction: 0.1, requiredTech: 'herbal_lore' },
+    [CampBuildingType.Tent]: { name: 'Tent', description: 'Provides housing for camp members, reducing overcrowding. Upgradeable.', cost: { wood: 5, hides: 5, stone: 1 }, productionCost: 25, housingCapacity: 10 },
 };
 
 export const axialDirections: {q: number, r: number}[] = [

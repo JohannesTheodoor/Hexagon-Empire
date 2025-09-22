@@ -2,6 +2,25 @@
 import { AxialCoords } from '../types';
 import { HEX_SIZE } from '../constants';
 
+// A simple priority queue for pathfinding (A* or Dijkstra)
+export class PriorityQueue<T> {
+  private elements: { item: T; priority: number }[] = [];
+
+  enqueue(item: T, priority: number) {
+    this.elements.push({ item, priority });
+    this.elements.sort((a, b) => a.priority - b.priority);
+  }
+
+  dequeue(): T | undefined {
+    return this.elements.shift()?.item;
+  }
+
+  isEmpty(): boolean {
+    return this.elements.length === 0;
+  }
+}
+
+
 export const axialToString = (coords: AxialCoords): string => `${coords.q},${coords.r}`;
 
 export const stringToAxial = (s: string): AxialCoords => {
