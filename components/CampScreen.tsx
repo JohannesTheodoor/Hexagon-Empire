@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { GameState, UnitType, Unit, TerrainType, CampBuildingType, BuildQueueItem, Gender, Army, ResourceCost } from '../types';
 import { UNIT_DEFINITIONS, TERRAIN_DEFINITIONS, CAMP_BUILDING_DEFINITIONS, GATHERING_YIELD_PER_POINT } from '../constants';
@@ -177,23 +179,29 @@ const CampScreen: React.FC<CampScreenProps> = ({ armyId, onClose }) => {
   }, [army.controlledTiles, gameState.hexes]);
 
   // Food calculations
-  const totalUnitFoodStored = garrisonedUnits.reduce((sum, u) => sum + u.foodStored, 0);
+  // FIX: Explicitly type reduce callback parameters to prevent 'unknown' type inference.
+  const totalUnitFoodStored = garrisonedUnits.reduce((sum: number, u: Unit) => sum + u.foodStored, 0);
   const totalFoodStored = (army.food ?? 0) + totalUnitFoodStored;
-  const totalUnitFoodCapacity = garrisonedUnits.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].foodCarryCapacity, 0);
+  // FIX: Explicitly type reduce callback parameters to prevent 'unknown' type inference.
+  const totalUnitFoodCapacity = garrisonedUnits.reduce((sum: number, u: Unit) => sum + UNIT_DEFINITIONS[u.type].foodCarryCapacity, 0);
   const totalCampFoodCapacity = army.foodStorageCapacity ?? 0;
   const totalOverallFoodCapacity = totalUnitFoodCapacity + totalCampFoodCapacity;
-  let totalFoodGatherRate = garrisonedUnits.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].foodGatherRate, 0);
+  // FIX: Explicitly type reduce callback parameters to prevent 'unknown' type inference.
+  let totalFoodGatherRate = garrisonedUnits.reduce((sum: number, u: Unit) => sum + UNIT_DEFINITIONS[u.type].foodGatherRate, 0);
   if (army.buildings?.includes(CampBuildingType.ForagingPost)) {
       totalFoodGatherRate += CAMP_BUILDING_DEFINITIONS[CampBuildingType.ForagingPost].foodGatherBonus ?? 0;
   }
-  const totalConsumption = garrisonedUnits.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].foodConsumption, 0);
+  // FIX: Explicitly type reduce callback parameters to prevent 'unknown' type inference.
+  const totalConsumption = garrisonedUnits.reduce((sum: number, u: Unit) => sum + UNIT_DEFINITIONS[u.type].foodConsumption, 0);
   const foodToGather = Math.min(availableFoodOnTerritory, totalFoodGatherRate);
   const netFoodChange = foodToGather - totalConsumption;
   const netColor = netFoodChange >= 0 ? 'text-green-400' : 'text-red-400';
   
-  const totalWorkPoints = garrisonedUnits.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].productionYield, 0);
-  const productionPoints = totalWorkPoints * (productionFocus / 100);
-  const gatheringPoints = totalWorkPoints * ((100 - productionFocus) / 100);
+  // FIX: Explicitly type reduce callback parameters to prevent 'unknown' type inference.
+  const totalWorkPoints = garrisonedUnits.reduce((sum: number, u: Unit) => sum + UNIT_DEFINITIONS[u.type].productionYield, 0);
+  // FIX: Explicitly cast productionFocus and totalWorkPoints to Number to prevent type errors from state cloning.
+  const productionPoints = Number(totalWorkPoints) * (Number(productionFocus) / 100);
+  const gatheringPoints = Number(totalWorkPoints) * ((100 - Number(productionFocus)) / 100);
   const focusedResourcesCount = Object.values(resourceFocus).filter(v => v).length;
   const pointsPerResource = focusedResourcesCount > 0 ? gatheringPoints / focusedResourcesCount : 0;
   const projectedYield = Math.round(pointsPerResource * GATHERING_YIELD_PER_POINT);
@@ -574,7 +582,9 @@ const CampScreen: React.FC<CampScreenProps> = ({ armyId, onClose }) => {
                         </div>
                     )
                 })}
-                {Array.from({ length: Number(army.level) - ((army.buildings?.length ?? 0) + (army.tentLevel ? 1 : 0)) }).map((_, index) => {
+                {/* FIX: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type. */}
+                {/* FIX: Explicitly cast army.tentLevel and army.level to Number to prevent type errors from state cloning. */}
+                {Array.from({ length: Number(army.level) - (((army.buildings as CampBuildingType[] | undefined)?.length ?? 0) + (Number(army.tentLevel) ? 1 : 0)) }).map((_, index) => {
                     const isSlotQueued = army.buildQueue?.some(item => item.type === 'building');
                      if (isCurrentPlayerCamp && !isSlotQueued && index === 0) {
                          return <div key={`empty-${index}`} className="bg-gray-900/50 p-2 rounded-lg flex items-center justify-center h-24 text-gray-500 italic">Empty Slot</div>

@@ -1,8 +1,5 @@
 
 
-
-
-
 import React, { useState, useMemo } from 'react';
 // FIX: Added BuildingType to imports to resolve multiple "Cannot find name" errors.
 import { GameState, City, UnitType, BuildQueueItem, Unit, TerrainType, Gender, ResourceCost, Army, BuildingType } from '../types';
@@ -111,8 +108,10 @@ const CityScreen: React.FC<CityScreenProps> = ({ cityId, onClose }) => {
   }, new Map<UnitType, Unit[]>());
 
 
-  const totalWorkPoints = garrisonedUnits.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].productionYield, 0);
-  const foodConsumption = garrisonedUnits.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].foodConsumption, 0);
+  // FIX: Explicitly type reduce callback parameters to prevent 'unknown' type inference.
+  const totalWorkPoints = garrisonedUnits.reduce((sum: number, u: Unit) => sum + UNIT_DEFINITIONS[u.type].productionYield, 0);
+  // FIX: Explicitly type reduce callback parameters to prevent 'unknown' type inference.
+  const foodConsumption = garrisonedUnits.reduce((sum: number, u: Unit) => sum + UNIT_DEFINITIONS[u.type].foodConsumption, 0);
   
   const hasFishing = player.unlockedTechs.includes('fishing');
   const fishingFoodBonus = hasFishing ? TECH_TREE['fishing'].effects.find(e => e.payload.bonus === 'food_from_water')?.payload.value ?? 0 : 0;
@@ -146,7 +145,10 @@ const CityScreen: React.FC<CityScreenProps> = ({ cityId, onClose }) => {
 
   const foodSurplus = yields.food - foodConsumption;
   
-  let goldFromCity = BASE_CITY_INCOME + (city.controlledTiles.length - 1) * INCOME_PER_INFLUENCE_LEVEL;
+  // FIX: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+  // city.controlledTiles becomes `unknown` due to cloning, so its length is also `unknown`.
+  // Casting to string[] ensures length is a number before subtraction.
+  let goldFromCity = BASE_CITY_INCOME + ((city.controlledTiles as string[]).length - 1) * INCOME_PER_INFLUENCE_LEVEL;
   for(const buildingType of city.buildings) {
       goldFromCity += BUILDING_DEFINITIONS[buildingType].goldBonus ?? 0;
   }
@@ -294,8 +296,9 @@ const renderBuildingProduction = () => {
 
   // FIX: city.level can be inferred as 'unknown' after state cloning. Using Number() ensures it is treated as a number.
   const buildingSlots = Array.from({ length: Number(city.level) });
-  const productionPoints = totalWorkPoints * (productionFocus / 100);
-  const gatheringPoints = totalWorkPoints * ((100 - productionFocus) / 100);
+  // FIX: Explicitly cast productionFocus and totalWorkPoints to Number to prevent type errors from state cloning. This resolves cascading errors in subsequent calculations.
+  const productionPoints = Number(totalWorkPoints) * (Number(productionFocus) / 100);
+  const gatheringPoints = Number(totalWorkPoints) * ((100 - Number(productionFocus)) / 100);
   const focusedResourcesCount = Object.values(resourceFocus).filter(v => v).length;
   const pointsPerResource = focusedResourcesCount > 0 ? gatheringPoints / focusedResourcesCount : 0;
   const projectedYield = Math.round(pointsPerResource * GATHERING_YIELD_PER_POINT);

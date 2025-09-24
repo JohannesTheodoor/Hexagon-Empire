@@ -3,11 +3,12 @@ import React, { useState } from 'react';
 type WorldSize = 'small' | 'medium' | 'large';
 
 interface StartScreenProps {
-  onStartGame: (size: WorldSize) => void;
+  onStartGame: (size: WorldSize, seed?: string) => void;
 }
 
 const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
   const [showSizeSelector, setShowSizeSelector] = useState(false);
+  const [seed, setSeed] = useState('');
 
   return (
     <div className="w-screen h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-8 bg-[radial-gradient(#1f2937_1px,transparent_1px)] [background-size:16px_16px]">
@@ -29,23 +30,32 @@ const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
             <h2 className="text-3xl font-semibold mb-6 text-gray-200">Select World Size</h2>
             <div className="flex flex-col md:flex-row gap-6 justify-center">
               <button
-                onClick={() => onStartGame('small')}
+                onClick={() => onStartGame('small', seed)}
                 className="px-8 py-4 bg-gray-700 hover:bg-green-600 rounded-lg text-xl font-bold transition-colors duration-300 transform hover:scale-105"
               >
                 Small <span className="block text-sm font-normal text-gray-400">(25 x 17)</span>
               </button>
               <button
-                onClick={() => onStartGame('medium')}
+                onClick={() => onStartGame('medium', seed)}
                 className="px-8 py-4 bg-gray-700 hover:bg-yellow-600 rounded-lg text-xl font-bold transition-colors duration-300 transform hover:scale-105"
               >
                 Medium <span className="block text-sm font-normal text-gray-400">(35 x 25)</span>
               </button>
               <button
-                onClick={() => onStartGame('large')}
+                onClick={() => onStartGame('large', seed)}
                 className="px-8 py-4 bg-gray-700 hover:bg-red-600 rounded-lg text-xl font-bold transition-colors duration-300 transform hover:scale-105"
               >
                 Large <span className="block text-sm font-normal text-gray-400">(50 x 35)</span>
               </button>
+            </div>
+             <div className="mt-8">
+                <input
+                    type="text"
+                    value={seed}
+                    onChange={(e) => setSeed(e.target.value)}
+                    placeholder="Enter Map Seed (optional)"
+                    className="px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-center w-72 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                />
             </div>
           </div>
         )}

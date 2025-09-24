@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { GameState, AxialCoords, UnitType, BuildingType, BuildQueueItem, ArmyDeploymentInfo, City, Army, CampBuildingType, ResourceCost } from '../types';
+import { GameState, AxialCoords, UnitType, BuildingType, BuildQueueItem, ArmyDeploymentInfo, City, Army, CampBuildingType, ResourceCost, TransferInfo } from '../types';
 import { deepCloneGameState } from '../utils/gameStateUtils';
 import { 
     initializeGameState,
@@ -24,14 +24,15 @@ import {
     processEconomyAndRecovery,
     processUnitCleanup,
     processCulturalShifts,
-    finalizeTurn
+    finalizeTurn,
+    processConfirmTransfer
 } from '../utils/gameLogic';
 
 interface GameStateSlice {
     gameState: GameState | null;
     
     // Actions
-    startGame: (width: number, height: number) => void;
+    startGame: (width: number, height: number, seed?: string) => void;
     endTurn: () => void;
     hexClick: (payload: { coords: AxialCoords; selectedArmyId: string | null; reachableHexes: Set<string>; attackableHexes: Set<string>; expandableHexes: Set<string>; pathCosts: Map<string, number>; selectedHex: AxialCoords | null; }) => void;
     finalizeCampSetup: (payload: { armyId: string; selectedTileKeys: string[] }) => void;
@@ -46,6 +47,7 @@ interface GameStateSlice {
     updateCityFocus: (payload: { cityId: string; focus: { productionFocus: number; resourceFocus: City['resourceFocus']} }) => void;
     updateCampFocus: (payload: { armyId: string; focus: { productionFocus: number; resourceFocus: Army['resourceFocus']} }) => void;
     dropResource: (payload: { containerId: string, containerType: 'city' | 'army', resource: keyof ResourceCost, amount: number }) => void;
+    confirmTransfer: (payload: { transferInfo: TransferInfo; finalSourceUnitIds: string[]; finalDestinationUnitIds: string[] }) => void;
     
     // Direct state setter for special cases (e.g., AI turn)
     _setGameState: (newState: GameState) => void;
@@ -54,7 +56,7 @@ interface GameStateSlice {
 export const useGameStore = create<GameStateSlice>((set, get) => ({
     gameState: null,
     
-    startGame: (width, height) => set({ gameState: initializeGameState(width, height) }),
+    startGame: (width, height, seed) => set({ gameState: initializeGameState(width, height, seed) }),
     
     endTurn: () => {
         const currentState = get().gameState;
@@ -164,6 +166,13 @@ export const useGameStore = create<GameStateSlice>((set, get) => ({
         const currentState = get().gameState;
         if (currentState) {
             set({ gameState: processDropResource(currentState, payload) });
+        }
+    },
+
+    confirmTransfer: (payload) => {
+        const currentState = get().gameState;
+        if (currentState) {
+            set({ gameState: processConfirmTransfer(currentState, payload) });
         }
     },
 

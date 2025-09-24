@@ -269,6 +269,12 @@ export interface ArmyDeploymentInfo {
     unitsToMove: { unitType: UnitType; count: number }[];
 }
 
+export interface TransferInfo {
+  sourceArmyId: string;
+  destinationId: string;
+  destinationType: 'city' | 'army';
+}
+
 
 // Tech Tree Types
 export enum TechEffectType {
@@ -286,6 +292,7 @@ export interface Technology {
     id: string;
     name: string;
     description: string;
+    narrative: string;
     cost: number;
     prerequisites: string[];
     effects: TechEffect[];

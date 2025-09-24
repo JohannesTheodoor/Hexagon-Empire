@@ -1,209 +1,14 @@
-import { GameState, CampBuildingType, TerrainType, City, Army, BuildQueueItem, UnitType, BuildingType, Unit, Gender, UnitDefinition, ResourceCost, Player, Hex, AxialCoords, ArmyDeploymentInfo, SicknessRiskDetails } from '../types';
+import { GameState, CampBuildingType, TerrainType, City, Army, BuildQueueItem, UnitType, BuildingType, Unit, Gender, UnitDefinition, ResourceCost, Player, Hex, AxialCoords, ArmyDeploymentInfo, SicknessRiskDetails, UnitSize, TransferInfo } from '../types';
 import { UNIT_DEFINITIONS, STARVATION_DAMAGE, CAMP_BUILDING_DEFINITIONS, GATHERING_YIELD_PER_POINT, TERRAIN_DEFINITIONS, BASE_CITY_FOOD_STORAGE, BUILDING_DEFINITIONS, CAMP_XP_PER_TURN, CAMP_XP_PER_UNIT_PROD_COST, CAMP_XP_PER_BUILDING_PROD_COST, CAMP_XP_PER_NEW_MEMBER, INITIAL_XP_TO_NEXT_LEVEL, XP_LEVEL_MULTIPLIER, DISEASE_RISK_BASE, DISEASE_STAGNATION_INCREASE_PER_TURN, DISEASE_DAMAGE, CITY_HP, INITIAL_CITY_POPULATION, axialDirections, BUY_INFLUENCE_TILE_COST, CAMP_DEFENSE_BONUS, DISEASE_OVERCROWDING_THRESHOLD, DISEASE_OVERCROWDING_RISK_PER_UNIT, SHAMAN_RISK_REDUCTION_FLAT, MAX_SHAMAN_FLAT_REDUCTION } from '../constants';
 import { TECH_TREE } from '../techtree';
 import { CULTURAL_ASPECTS } from '../culture';
-import { axialToString, getHexesInRange, hexDistance, stringToAxial } from './hexUtils';
+import { axialToString, getHexesInRange, hexDistance, stringToAxial, PriorityQueue } from './hexUtils';
 import { deepCloneGameState } from './gameStateUtils';
-import { Noise } from './noise';
+import { generateMap } from './worldGeneration';
 import { generateId } from './gameStateUtils';
 
-const generateMap = (width: number, height: number): Map<string, Hex> => {
-    const hexes = new Map<string, Hex>();
-    const elevationNoise = new Noise(Math.random());
-    const moistureNoise = new Noise(Math.random());
-    const biomeNoise = new Noise(Math.random());
-
-    const ELEVATION_SCALE = 10;
-    const MOISTURE_SCALE = 7;
-    const BIOME_SCALE = 4;
-
-    // Step 1: Initial terrain generation based on noise
-    for (let q = 0; q < width; q++) {
-        for (let r = 0; r < height; r++) {
-            const nx = (q / width) * 2 - 1;
-            const ny = (r / height) * 2 - 1;
-
-            let e =
-                1.00 * elevationNoise.perlin2(nx * ELEVATION_SCALE, ny * ELEVATION_SCALE) +
-                0.50 * elevationNoise.perlin2(nx * ELEVATION_SCALE * 2, ny * ELEVATION_SCALE * 2) +
-                0.25 * elevationNoise.perlin2(nx * ELEVATION_SCALE * 4, ny * ELEVATION_SCALE * 4);
-            e /= (1.00 + 0.50 + 0.25);
-            e = (1 + e) / 2; // Normalize to 0-1
-
-            // Sharper falloff for smaller sea edges
-            const distFromCenter = Math.sqrt(nx * nx + ny * ny);
-            let shapedE = e - Math.pow(distFromCenter, 4);
-
-            let m = (1 + moistureNoise.perlin2(nx * MOISTURE_SCALE, ny * MOISTURE_SCALE)) / 2;
-            let b = (1 + biomeNoise.perlin2(nx * BIOME_SCALE, ny * BIOME_SCALE)) / 2;
-
-            let terrainType: TerrainType;
-            if (shapedE < 0.18) { // Adjusted threshold for new exponent
-                terrainType = TerrainType.Sea;
-            } else if (shapedE < 0.3) {
-                terrainType = (m > 0.6) ? TerrainType.Swamp : TerrainType.Plains;
-            } else if (shapedE < 0.7) {
-                if (b < 0.45) {
-                    if (m < 0.3) terrainType = TerrainType.Desert;
-                    else terrainType = TerrainType.Steppe;
-                } else {
-                    if (m < 0.25) terrainType = TerrainType.Plains;
-                    else terrainType = TerrainType.Forest;
-                }
-            } else if (shapedE < 0.85) {
-                terrainType = TerrainType.Hills;
-            } else {
-                terrainType = TerrainType.Mountains;
-            }
-            
-            const hex: Hex = { q, r, terrain: terrainType, currentFood: 0, currentWood: 0, currentStone: 0, currentHides: 0, currentObsidian: 0 };
-            hexes.set(axialToString({ q, r }), hex);
-        }
-    }
-    
-    // Step 2: Separate ocean from inland seas (lakes)
-    const oceanTiles = new Set<string>();
-    const queue: AxialCoords[] = [];
-    let oceanSeed: AxialCoords | null = null;
-    // Find a seed on the map edge
-    for (let q = 0; q < width; q++) {
-        if (hexes.get(axialToString({ q, r: 0 }))?.terrain === TerrainType.Sea) { oceanSeed = { q, r: 0 }; break; }
-        if (hexes.get(axialToString({ q, r: height - 1 }))?.terrain === TerrainType.Sea) { oceanSeed = { q, r: height - 1 }; break; }
-    }
-    if (!oceanSeed) {
-        for (let r = 0; r < height; r++) {
-            if (hexes.get(axialToString({ q: 0, r }))?.terrain === TerrainType.Sea) { oceanSeed = { q: 0, r }; break; }
-            if (hexes.get(axialToString({ q: width - 1, r }))?.terrain === TerrainType.Sea) { oceanSeed = { q: width - 1, r }; break; }
-        }
-    }
-    
-    // Flood fill from the edge to identify all ocean tiles
-    if (oceanSeed) {
-        queue.push(oceanSeed);
-        oceanTiles.add(axialToString(oceanSeed));
-        while (queue.length > 0) {
-            const current = queue.shift()!;
-            for (const dir of axialDirections) {
-                const neighborCoords = { q: current.q + dir.q, r: current.r + dir.r };
-                const neighborKey = axialToString(neighborCoords);
-                const neighborHex = hexes.get(neighborKey);
-                if (neighborHex && neighborHex.terrain === TerrainType.Sea && !oceanTiles.has(neighborKey)) {
-                    oceanTiles.add(neighborKey);
-                    queue.push(neighborCoords);
-                }
-            }
-        }
-    }
-    
-    // Any sea tile not connected to the edge is a lake
-    for (const hex of hexes.values()) {
-        if (hex.terrain === TerrainType.Sea && !oceanTiles.has(axialToString(hex))) {
-            hex.terrain = TerrainType.Lake;
-        }
-    }
-
-    const landTiles = Array.from(hexes.values()).filter(h => h.terrain !== TerrainType.Sea && h.terrain !== TerrainType.Lake);
-
-    // Step 3: Place Mountain Ranges and connecting Hills
-    const mountainTiles = new Set<string>();
-    let mountainRanges = 0;
-    let attempts = 0;
-    const potentialRangeStarts = [...landTiles].sort((a,b) => b.q - a.q); // Sort to get some spatial separation
-
-    while (mountainRanges < 2 && attempts < 200 && potentialRangeStarts.length > 0) {
-        attempts++;
-        const randIndex = Math.floor(Math.random() * potentialRangeStarts.length);
-        const startHex = potentialRangeStarts.splice(randIndex, 1)[0];
-        
-        const direction = axialDirections[Math.floor(Math.random() * 6)];
-        const rangeLength = 3;
-        const currentRange: Hex[] = [];
-        let isValidRange = true;
-
-        for (let i = 0; i < rangeLength; i++) {
-            const pos = { q: startHex.q + direction.q * i, r: startHex.r + direction.r * i };
-            const key = axialToString(pos);
-            const hex = hexes.get(key);
-
-            if (!hex || hex.terrain === TerrainType.Sea || hex.terrain === TerrainType.Lake || mountainTiles.has(key)) {
-                isValidRange = false;
-                break;
-            }
-            currentRange.push(hex);
-        }
-
-        if (isValidRange) {
-            currentRange.forEach(hex => {
-                hex.terrain = TerrainType.Mountains;
-                mountainTiles.add(axialToString(hex));
-            });
-            mountainRanges++;
-        }
-    }
-    
-    // Place connecting hills
-    for (const mountainKey of mountainTiles) {
-        const mountainCoords = stringToAxial(mountainKey);
-        for (const dir of axialDirections) {
-            const neighborCoords = { q: mountainCoords.q + dir.q, r: mountainCoords.r + dir.r };
-            const neighborKey = axialToString(neighborCoords);
-            const neighborHex = hexes.get(neighborKey);
-            
-            if (neighborHex && (neighborHex.terrain === TerrainType.Plains || neighborHex.terrain === TerrainType.Forest || neighborHex.terrain === TerrainType.Steppe || neighborHex.terrain === TerrainType.Desert)) {
-                if (Math.random() < 0.7) { // High probability to become a hill
-                    neighborHex.terrain = TerrainType.Hills;
-                }
-            }
-        }
-    }
-
-    // Step 4: Place Volcanic Tiles
-    let volcanicCount = Array.from(hexes.values()).filter(h => h.terrain === TerrainType.Volcanic).length;
-    attempts = 0;
-    const mountainAndHillTiles = Array.from(hexes.values()).filter(h => h.terrain === TerrainType.Mountains || h.terrain === TerrainType.Hills);
-    const potentialVolcanoes = [...mountainAndHillTiles];
-    
-    while (volcanicCount < 2 && attempts < 100 && potentialVolcanoes.length > 0) {
-        attempts++;
-        const randIndex = Math.floor(Math.random() * potentialVolcanoes.length);
-        const candidate = potentialVolcanoes.splice(randIndex, 1)[0];
-        
-        if (candidate.terrain !== TerrainType.Volcanic) {
-            candidate.terrain = TerrainType.Volcanic;
-            volcanicCount++;
-        }
-    }
-
-    // Step 5: Place Swamps next to Lakes
-    const lakeTiles = Array.from(hexes.values()).filter(h => h.terrain === TerrainType.Lake);
-    for (const lake of lakeTiles) {
-        for (const dir of axialDirections) {
-            const neighborCoords = { q: lake.q + dir.q, r: lake.r + dir.r };
-            const neighborHex = hexes.get(axialToString(neighborCoords));
-            
-            if (neighborHex && (neighborHex.terrain === TerrainType.Plains || neighborHex.terrain === TerrainType.Forest || neighborHex.terrain === TerrainType.Steppe)) {
-                if (Math.random() < 0.6) { // High probability to become a swamp
-                    neighborHex.terrain = TerrainType.Swamp;
-                }
-            }
-        }
-    }
-
-    // Final Step: Initialize resources for all hexes based on their final terrain type
-    for (const hex of hexes.values()) {
-        const terrainDef = TERRAIN_DEFINITIONS[hex.terrain];
-        hex.currentFood = terrainDef.maxFood;
-        hex.currentWood = terrainDef.maxWood;
-        hex.currentStone = terrainDef.maxStone;
-        hex.currentHides = terrainDef.maxHides;
-        hex.currentObsidian = terrainDef.maxObsidian;
-    }
-    
-    return hexes;
-};
-
-export function initializeGameState(width: number, height: number): GameState {
-    const hexes = generateMap(width, height);
+export function initializeGameState(width: number, height: number, seed?: string): GameState {
+    const hexes = generateMap(width, height, seed);
         
     const findValidPlacement = (startPos: AxialCoords, maxRadius: number): AxialCoords => {
         const isHabitable = (hex: Hex | undefined) => hex && TERRAIN_DEFINITIONS[hex.terrain].movementCost < 99 && !hex.cityId;
@@ -350,6 +155,99 @@ const getSicknessRisk = (container: Army | City, units: Unit[], hex: Hex): { ris
     return { risk: finalRisk, details };
 };
 
+export const calculateReachableHexes = (start: AxialCoords, army: Army, gs: GameState): { reachable: Set<string>; costs: Map<string, number> } => {
+    if (army.isCamped) return { reachable: new Set(), costs: new Map() };
+
+    const costSoFar: Map<string, number> = new Map();
+    costSoFar.set(axialToString(start), 0);
+    const reachable = new Set<string>();
+    
+    const player = gs.players.find(p => p.id === army.ownerId)!;
+    const unitsInArmy = army.unitIds.map(id => gs.units.get(id)!);
+
+    const frontier = new PriorityQueue<{ pos: AxialCoords; cost: number }>();
+    frontier.enqueue({ pos: start, cost: 0 }, 0);
+
+    while (!frontier.isEmpty()) {
+        const current = frontier.dequeue();
+        if (!current) break;
+
+        axialDirections.forEach(dir => {
+            const nextCoords = { q: current.pos.q + dir.q, r: current.pos.r + dir.r };
+            const nextKey = axialToString(nextCoords);
+            const nextHex = gs.hexes.get(nextKey);
+
+            if (nextHex) {
+                const terrainDef = TERRAIN_DEFINITIONS[nextHex.terrain];
+                let moveCost = terrainDef.movementCost;
+                
+                if (terrainDef.requiredTech && !player.unlockedTechs.includes(terrainDef.requiredTech)) {
+                    moveCost = 99;
+                }
+                const isImpassableByUnit = unitsInArmy.some(u => UNIT_DEFINITIONS[u.type].size === UnitSize.Large && terrainDef.name === 'Forest');
+                if (isImpassableByUnit) moveCost = 99;
+
+                const newCost = current.cost + moveCost;
+                const isOccupiedByEnemy = nextHex.armyId && gs.armies.get(nextHex.armyId)?.ownerId !== army.ownerId;
+
+                if (newCost <= army.movementPoints && !isOccupiedByEnemy && (!costSoFar.has(nextKey) || newCost < costSoFar.get(nextKey)!)) {
+                    costSoFar.set(nextKey, newCost);
+                    frontier.enqueue({ pos: nextCoords, cost: newCost }, newCost);
+                    reachable.add(nextKey);
+                }
+            }
+        });
+    }
+
+    if (army.movementPoints > 0) {
+        axialDirections.forEach(dir => {
+            const nextCoords = { q: start.q + dir.q, r: start.r + dir.r };
+            const nextKey = axialToString(nextCoords);
+            const nextHex = gs.hexes.get(nextKey);
+            
+            if (nextHex) {
+                const terrainDef = TERRAIN_DEFINITIONS[nextHex.terrain];
+                let moveCost = terrainDef.movementCost;
+                
+                const isTechLocked = terrainDef.requiredTech && !player.unlockedTechs.includes(terrainDef.requiredTech);
+                const isImpassableByUnit = unitsInArmy.some(u => UNIT_DEFINITIONS[u.type].size === UnitSize.Large && terrainDef.name === 'Forest');
+                const isOccupiedByEnemy = nextHex.armyId && gs.armies.get(nextHex.armyId)?.ownerId !== army.ownerId;
+                
+                const isPassable = !isTechLocked && !isImpassableByUnit && !isOccupiedByEnemy && moveCost < 99;
+
+                if (isPassable) {
+                    reachable.add(nextKey);
+                    if (!costSoFar.has(nextKey)) {
+                        costSoFar.set(nextKey, moveCost);
+                    }
+                }
+            }
+        });
+    }
+
+    return { reachable, costs: costSoFar };
+};
+
+export const findAttackableHexes = (start: AxialCoords, army: Army, gs: GameState): Set<string> => {
+    if (army.isCamped || army.movementPoints === 0) return new Set();
+    const attackable = new Set<string>();
+    axialDirections.forEach(dir => {
+        const neighborCoords = { q: start.q + dir.q, r: start.r + dir.r };
+        const neighborKey = axialToString(neighborCoords);
+        const neighborHex = gs.hexes.get(neighborKey);
+        if (neighborHex) {
+            if (neighborHex.armyId) {
+                const targetArmy = gs.armies.get(neighborHex.armyId);
+                if (targetArmy && targetArmy.ownerId !== army.ownerId) attackable.add(neighborKey);
+            }
+            if (neighborHex.cityId) {
+                const city = gs.cities.get(neighborHex.cityId);
+                if (city && city.ownerId !== army.ownerId) attackable.add(neighborKey);
+            }
+        }
+    });
+    return attackable;
+};
 
 export function processHexClick(
     gs: GameState, 
@@ -443,63 +341,13 @@ export function processHexClick(
             
             return newGs;
         } 
-        // MOVE / MERGE / GARRISON
+        // MOVE (No merge/garrison logic here anymore, handled by UI)
         else if (reachableHexes.has(clickedHexKey)) {
-            const destinationHex = newGs.hexes.get(clickedHexKey)!;
-            const destinationArmyId = destinationHex.armyId;
-            const destinationCityId = destinationHex.cityId;
-
-            // 1. MERGE LOGIC
-            if (destinationArmyId) {
-                const destinationArmy = newGs.armies.get(destinationArmyId);
-                if (destinationArmy && destinationArmy.ownerId === selectedArmy.ownerId) {
-                    const movingArmy = selectedArmy;
-                    destinationArmy.unitIds.push(...movingArmy.unitIds);
-
-                    if (destinationArmy.isCamped) {
-                        destinationArmy.xp = (destinationArmy.xp ?? 0) + (movingArmy.unitIds.length * CAMP_XP_PER_NEW_MEMBER);
-                    }
-
-                    const allUnitsInMergedArmy = destinationArmy.unitIds.map(id => newGs.units.get(id)!);
-                    destinationArmy.maxMovementPoints = Math.min(...allUnitsInMergedArmy.map(u => UNIT_DEFINITIONS[u.type].movement));
-                    destinationArmy.movementPoints = 0;
-
-                    newGs.armies.delete(movingArmy.id);
-                    const movingArmyStartHex = newGs.hexes.get(axialToString(movingArmy.position))!;
-                    movingArmyStartHex.armyId = undefined;
-                    movingArmyStartHex.armyPresenceTurns = 0; // Reset timer on departure hex
-
-                    return newGs;
-                }
-            }
-
-            // 2. GARRISON LOGIC
-            if (destinationCityId) {
-                const destinationCity = newGs.cities.get(destinationCityId);
-                if (destinationCity && destinationCity.ownerId === selectedArmy.ownerId) {
-                    const armyToMerge = selectedArmy;
-                    
-                    for(const unitId of armyToMerge.unitIds) {
-                        const unit = newGs.units.get(unitId)!;
-                        destinationCity.food += unit.foodStored;
-                        unit.foodStored = 0;
-                    }
-                    
-                    destinationCity.garrison.push(...armyToMerge.unitIds);
-                    newGs.armies.delete(selectedArmy.id);
-                    const armyHex = newGs.hexes.get(axialToString(armyToMerge.position))!;
-                    armyHex.armyId = undefined;
-                    armyHex.armyPresenceTurns = 0; // Reset timer on departure hex
-
-                    return newGs;
-                }
-            }
-
-            // 3. REGULAR MOVE
             const startHex = newGs.hexes.get(axialToString(selectedArmy.position))!;
             startHex.armyId = undefined;
             startHex.armyPresenceTurns = 0; // Reset timer on departure hex
             
+            const destinationHex = newGs.hexes.get(clickedHexKey)!;
             destinationHex.armyId = selectedArmy.id;
             
             const moveCost = pathCosts.get(clickedHexKey);
@@ -629,6 +477,51 @@ export function processDeployArmy(gs: GameState, payload: { deploymentInfo: Army
     const targetHex = newGs.hexes.get(axialToString(targetPosition))!;
     targetHex.armyId = newArmyId;
     
+    return newGs;
+}
+
+export function processConfirmTransfer(gs: GameState, payload: { transferInfo: TransferInfo; finalSourceUnitIds: string[]; finalDestinationUnitIds: string[] }): GameState {
+    const newGs = deepCloneGameState(gs);
+    const { transferInfo, finalSourceUnitIds, finalDestinationUnitIds } = payload;
+    const { sourceArmyId, destinationId, destinationType } = transferInfo;
+
+    const sourceArmy = newGs.armies.get(sourceArmyId)!;
+    const destination = destinationType === 'city'
+        ? newGs.cities.get(destinationId)!
+        : newGs.armies.get(destinationId)!;
+
+    // 1. Update unit lists
+    sourceArmy.unitIds = finalSourceUnitIds;
+    if ('garrison' in destination) {
+        destination.garrison = finalDestinationUnitIds;
+    } else {
+        destination.unitIds = finalDestinationUnitIds;
+    }
+
+    // 2. Update source army
+    sourceArmy.movementPoints = 0;
+    if (sourceArmy.unitIds.length === 0) {
+        const sourceHex = newGs.hexes.get(axialToString(sourceArmy.position))!;
+        sourceHex.armyId = undefined;
+        sourceHex.armyPresenceTurns = 0;
+        newGs.armies.delete(sourceArmyId);
+    } else {
+        const sourceUnits = sourceArmy.unitIds.map(id => newGs.units.get(id)!);
+        sourceArmy.maxMovementPoints = Math.min(...sourceUnits.map(u => UNIT_DEFINITIONS[u.type].movement));
+    }
+
+    // 3. Update destination army (if it's an army)
+    if (destinationType === 'army') {
+        const destArmy = destination as Army;
+        const destUnits = destArmy.unitIds.map(id => newGs.units.get(id)!);
+        if (destUnits.length > 0) {
+            destArmy.maxMovementPoints = Math.min(...destUnits.map(u => UNIT_DEFINITIONS[u.type].movement));
+        }
+        if (destArmy.isCamped) {
+            // Logic for XP gain on merge could be added here
+        }
+    }
+
     return newGs;
 }
 

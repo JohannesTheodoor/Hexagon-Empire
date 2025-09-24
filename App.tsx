@@ -1,8 +1,3 @@
-
-
-
-
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import GameBoard from './components/GameBoard';
 import GameUI from './components/GameUI';
@@ -14,9 +9,11 @@ import ArmyBar from './components/ArmyBar';
 import ResearchScreen from './components/ResearchScreen';
 import CultureScreen from './components/CultureScreen';
 import CreateArmyScreen from './components/CreateArmyScreen';
+import TransferScreen from './components/TransferScreen';
 import StartScreen from './components/StartScreen';
+import TechUnlockedScreen from './components/TechUnlockedScreen';
 // FIX: Added City to imports to allow for explicit type annotation.
-import { GameState, AxialCoords, UnitType, Army, ArmyDeploymentInfo, Gender, CampBuildingType, Unit, UnitSize, City } from './types';
+import { GameState, AxialCoords, UnitType, Army, ArmyDeploymentInfo, Gender, CampBuildingType, Unit, UnitSize, City, TransferInfo } from './types';
 import { MAP_SIZES, TERRAIN_DEFINITIONS, UNIT_DEFINITIONS, axialDirections, CITY_VISION_RANGE, UNIT_VISION_RANGE, CAMP_INFLUENCE_RANGE, CAMP_VISION_RANGE, CAMP_BUILDING_DEFINITIONS } from './constants';
 import { axialToString, stringToAxial, getHexesInRange, hexDistance, axialToPixel, PriorityQueue } from './utils/hexUtils';
 import { playSound, setVolume, setMuted, ensureAudioInitialized } from './utils/soundManager';
@@ -24,9 +21,10 @@ import { deepCloneGameState } from './utils/gameStateUtils';
 import { useGameStore } from './store/gameStore';
 import { 
     processHexClick,
-    processProduceUnit,
-    processDeployArmy
+    calculateReachableHexes, 
+    findAttackableHexes
 } from './utils/gameLogic';
+import { runAITurnLogic } from './utils/aiLogic';
 
 type WorldSize = 'small' | 'medium' | 'large';
 
@@ -75,8 +73,11 @@ const App: React.FC = () => {
     const [isCultureScreenOpen, setIsCultureScreenOpen] = useState(false);
     const [armyFormationSource, setArmyFormationSource] = useState<{ sourceId: string; sourceType: 'city' | 'army' } | null>(null);
     const [armyDeploymentInfo, setArmyDeploymentInfo] = useState<ArmyDeploymentInfo | null>(null);
+    const [transferInfo, setTransferInfo] = useState<TransferInfo | null>(null);
     const [volume, setVolumeState] = useState(0.5);
     const [isMutedState, setIsMutedState] = useState(false);
+    const [justUnlockedTechId, setJustUnlockedTechId] = useState<string | null>(null);
+    const [notifiedTechs, setNotifiedTechs] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         const initAudio = () => {
@@ -89,6 +90,30 @@ const App: React.FC = () => {
 
     useEffect(() => { setVolume(volume); }, [volume]);
     useEffect(() => { setMuted(isMutedState); }, [isMutedState]);
+
+    // New, corrected effect for handling the tech unlocked popup
+    useEffect(() => {
+        // Guard against running when no game, it's AI turn, or a popup is already open
+        if (!gameState || gameState.currentPlayerId !== 1 || isAITurning) {
+            return;
+        }
+
+        const player = gameState.players.find(p => p.id === 1);
+        if (!player) return;
+
+        // Find the first tech that is unlocked but hasn't been shown in a popup yet
+        const unnotifiedTech = player.unlockedTechs.find(techId => !notifiedTechs.has(techId));
+
+        if (unnotifiedTech) {
+            // Check if any other modal is open to prevent overlap
+            if (!isCityScreenOpen && !isCampScreenOpen && !isResearchScreenOpen && !isCultureScreenOpen && !isSettingsOpen && !armyFormationSource && !transferInfo && !justUnlockedTechId) {
+                setJustUnlockedTechId(unnotifiedTech);
+                // Important: Update the notified set so this doesn't trigger again for the same tech
+                setNotifiedTechs(prev => new Set(prev).add(unnotifiedTech));
+            }
+        }
+    }, [gameState, isAITurning, notifiedTechs, isCityScreenOpen, isCampScreenOpen, isResearchScreenOpen, isCultureScreenOpen, isSettingsOpen, armyFormationSource, transferInfo, justUnlockedTechId]);
+
 
     const handleVolumeChange = (newVolume: number) => {
         setVolumeState(newVolume);
@@ -162,7 +187,7 @@ const App: React.FC = () => {
         let animationFrameId: number;
         const gameLoop = () => {
             const rect = gameContainerRef.current?.getBoundingClientRect();
-            if (rect && !isPanning && !isCityScreenOpen && !isResearchScreenOpen && !isSettingsOpen && !armyFormationSource && !armyDeploymentInfo && !isCultureScreenOpen) {
+            if (rect && !isPanning && !isCityScreenOpen && !isResearchScreenOpen && !isSettingsOpen && !armyFormationSource && !armyDeploymentInfo && !isCultureScreenOpen && !transferInfo) {
                 const { x, y } = mousePosRef.current;
                 const edgeSize = 40;
                 const panSpeed = 10;
@@ -185,7 +210,7 @@ const App: React.FC = () => {
         };
         animationFrameId = requestAnimationFrame(gameLoop);
         return () => cancelAnimationFrame(animationFrameId);
-    }, [isPanning, isCityScreenOpen, isResearchScreenOpen, isSettingsOpen, armyFormationSource, armyDeploymentInfo, isCultureScreenOpen]);
+    }, [isPanning, isCityScreenOpen, isResearchScreenOpen, isSettingsOpen, armyFormationSource, armyDeploymentInfo, isCultureScreenOpen, transferInfo]);
 
     const handleGlobalMouseMove = useCallback((e: MouseEvent) => {
         mousePosRef.current = { x: e.clientX, y: e.clientY };
@@ -196,9 +221,9 @@ const App: React.FC = () => {
         return () => window.removeEventListener('mousemove', handleGlobalMouseMove);
     }, [handleGlobalMouseMove]);
 
-    const handleStartGame = useCallback((size: WorldSize) => {
+    const handleStartGame = useCallback((size: WorldSize, seed?: string) => {
         const { width, height } = MAP_SIZES[size];
-        startGame(width, height);
+        startGame(width, height, seed);
         setGameStarted(true);
         playSound('endTurn');
         setGameOverMessage(null);
@@ -217,6 +242,7 @@ const App: React.FC = () => {
         setIsCultureScreenOpen(false);
         setArmyFormationSource(null);
         setArmyDeploymentInfo(null);
+        setNotifiedTechs(new Set());
     }, [startGame]);
 
     const calculateVisibility = useCallback((gs: GameState) => {
@@ -277,100 +303,6 @@ const App: React.FC = () => {
         if (gameState) calculateVisibility(gameState);
     }, [gameState, calculateVisibility]);
 
-    const calculateReachableHexes = useCallback((start: AxialCoords, army: Army, gs: GameState): { reachable: Set<string>; costs: Map<string, number> } => {
-        if (army.isCamped) return { reachable: new Set(), costs: new Map() };
-    
-        const costSoFar: Map<string, number> = new Map();
-        costSoFar.set(axialToString(start), 0);
-        const reachable = new Set<string>();
-        
-        const player = gs.players.find(p => p.id === army.ownerId)!;
-        const unitsInArmy = army.unitIds.map(id => gs.units.get(id)!);
-    
-        const frontier = new PriorityQueue<{ pos: AxialCoords; cost: number }>();
-        frontier.enqueue({ pos: start, cost: 0 }, 0);
-    
-        while (!frontier.isEmpty()) {
-            const current = frontier.dequeue();
-            if (!current) break;
-    
-            axialDirections.forEach(dir => {
-                const nextCoords = { q: current.pos.q + dir.q, r: current.pos.r + dir.r };
-                const nextKey = axialToString(nextCoords);
-                const nextHex = gs.hexes.get(nextKey);
-    
-                if (nextHex) {
-                    const terrainDef = TERRAIN_DEFINITIONS[nextHex.terrain];
-                    let moveCost = terrainDef.movementCost;
-                    
-                    if (terrainDef.requiredTech && !player.unlockedTechs.includes(terrainDef.requiredTech)) {
-                        moveCost = 99;
-                    }
-                    const isImpassableByUnit = unitsInArmy.some(u => UNIT_DEFINITIONS[u.type].size === UnitSize.Large && terrainDef.name === 'Forest');
-                    if (isImpassableByUnit) moveCost = 99;
-    
-                    const newCost = current.cost + moveCost;
-                    const isOccupiedByEnemy = nextHex.armyId && gs.armies.get(nextHex.armyId)?.ownerId !== army.ownerId;
-    
-                    if (newCost <= army.movementPoints && !isOccupiedByEnemy && (!costSoFar.has(nextKey) || newCost < costSoFar.get(nextKey)!)) {
-                        costSoFar.set(nextKey, newCost);
-                        frontier.enqueue({ pos: nextCoords, cost: newCost }, newCost);
-                        reachable.add(nextKey);
-                    }
-                }
-            });
-        }
-    
-        if (army.movementPoints > 0) {
-            axialDirections.forEach(dir => {
-                const nextCoords = { q: start.q + dir.q, r: start.r + dir.r };
-                const nextKey = axialToString(nextCoords);
-                const nextHex = gs.hexes.get(nextKey);
-                
-                if (nextHex) {
-                    const terrainDef = TERRAIN_DEFINITIONS[nextHex.terrain];
-                    let moveCost = terrainDef.movementCost;
-                    
-                    const isTechLocked = terrainDef.requiredTech && !player.unlockedTechs.includes(terrainDef.requiredTech);
-                    const isImpassableByUnit = unitsInArmy.some(u => UNIT_DEFINITIONS[u.type].size === UnitSize.Large && terrainDef.name === 'Forest');
-                    const isOccupiedByEnemy = nextHex.armyId && gs.armies.get(nextHex.armyId)?.ownerId !== army.ownerId;
-                    
-                    const isPassable = !isTechLocked && !isImpassableByUnit && !isOccupiedByEnemy && moveCost < 99;
-
-                    if (isPassable) {
-                        reachable.add(nextKey);
-                        if (!costSoFar.has(nextKey)) {
-                            costSoFar.set(nextKey, moveCost);
-                        }
-                    }
-                }
-            });
-        }
-    
-        return { reachable, costs: costSoFar };
-    }, []);
-
-    const findAttackableHexes = useCallback((start: AxialCoords, army: Army, gs: GameState): Set<string> => {
-        if (army.isCamped || army.movementPoints === 0) return new Set();
-        const attackable = new Set<string>();
-        axialDirections.forEach(dir => {
-            const neighborCoords = { q: start.q + dir.q, r: start.r + dir.r };
-            const neighborKey = axialToString(neighborCoords);
-            const neighborHex = gs.hexes.get(neighborKey);
-            if (neighborHex) {
-                if (neighborHex.armyId) {
-                    const targetArmy = gs.armies.get(neighborHex.armyId);
-                    if (targetArmy && targetArmy.ownerId !== army.ownerId) attackable.add(neighborKey);
-                }
-                if (neighborHex.cityId) {
-                    const city = gs.cities.get(neighborHex.cityId);
-                    if (city && city.ownerId !== army.ownerId) attackable.add(neighborKey);
-                }
-            }
-        });
-        return attackable;
-    }, []);
-
     useEffect(() => {
         if (!gameState || !selectedHex) {
             setSelectedArmyId(null);
@@ -422,7 +354,7 @@ const App: React.FC = () => {
             setExpandableHexes(new Set());
         }
 
-    }, [gameState, selectedHex, calculateReachableHexes, findAttackableHexes]);
+    }, [gameState, selectedHex]);
     
     const selectHex = useCallback((coords: AxialCoords | null) => {
         if (armyDeploymentInfo) {
@@ -452,7 +384,7 @@ const App: React.FC = () => {
     }, [finalizeCampSetup]);
 
     const handleHexClick = useCallback((coords: AxialCoords) => {
-        if (!gameState || isAITurning || gameOverMessage || isCityScreenOpen || armyFormationSource || isCampScreenOpen || isCultureScreenOpen) return;
+        if (!gameState || isAITurning || gameOverMessage || isCityScreenOpen || armyFormationSource || isCampScreenOpen || isCultureScreenOpen || transferInfo || justUnlockedTechId) return;
         
         const clickedHexKey = axialToString(coords);
         const clickedHex = gameState.hexes.get(clickedHexKey);
@@ -495,6 +427,31 @@ const App: React.FC = () => {
             return;
         }
 
+        // Intercept for transfer screen
+        if (selectedArmyId && reachableHexes.has(clickedHexKey)) {
+            const selectedArmy = gameState.armies.get(selectedArmyId);
+            if (selectedArmy) {
+                const destArmyId = clickedHex.armyId;
+                const destCityId = clickedHex.cityId;
+                if (destArmyId) {
+                    const destArmy = gameState.armies.get(destArmyId);
+                    if (destArmy && destArmy.ownerId === selectedArmy.ownerId) {
+                        setTransferInfo({ sourceArmyId: selectedArmyId, destinationId: destArmyId, destinationType: 'army' });
+                        selectHex(null);
+                        return;
+                    }
+                }
+                if (destCityId) {
+                    const destCity = gameState.cities.get(destCityId);
+                    if (destCity && destCity.ownerId === selectedArmy.ownerId) {
+                        setTransferInfo({ sourceArmyId: selectedArmyId, destinationId: destCityId, destinationType: 'city' });
+                        selectHex(null);
+                        return;
+                    }
+                }
+            }
+        }
+
         const selectedArmy = selectedArmyId ? gameState.armies.get(selectedArmyId) : null;
         const isActionableClick = (selectedArmy && selectedArmy.ownerId === gameState.currentPlayerId && (attackableHexes.has(clickedHexKey) || reachableHexes.has(clickedHexKey))) || expandableHexes.has(clickedHexKey);
 
@@ -502,9 +459,7 @@ const App: React.FC = () => {
             if (expandableHexes.has(clickedHexKey)) playSound('upgrade');
             else if (attackableHexes.has(clickedHexKey)) playSound('attack');
             else if (reachableHexes.has(clickedHexKey)) {
-                const destArmy = gameState.hexes.get(clickedHexKey)?.armyId ? gameState.armies.get(gameState.hexes.get(clickedHexKey)!.armyId!) : null;
-                if(destArmy && destArmy.ownerId === selectedArmy?.ownerId) playSound('upgrade');
-                else playSound('move');
+                playSound('move');
             }
             hexClick({ coords, selectedArmyId, reachableHexes, attackableHexes, expandableHexes, pathCosts, selectedHex });
             if (attackableHexes.has(clickedHexKey)) {
@@ -516,7 +471,7 @@ const App: React.FC = () => {
             selectHex(coords);
         }
 
-    }, [gameState, selectedHex, selectedArmyId, reachableHexes, attackableHexes, expandableHexes, deployableHexes, pathCosts, armyDeploymentInfo, campTileSelectionInfo, isAITurning, gameOverMessage, selectHex, isCityScreenOpen, isCampScreenOpen, armyFormationSource, isCultureScreenOpen, handleFinalizeCampSetup, hexClick]);
+    }, [gameState, selectedHex, selectedArmyId, reachableHexes, attackableHexes, expandableHexes, deployableHexes, pathCosts, armyDeploymentInfo, campTileSelectionInfo, isAITurning, gameOverMessage, selectHex, isCityScreenOpen, isCampScreenOpen, armyFormationSource, isCultureScreenOpen, transferInfo, justUnlockedTechId, handleFinalizeCampSetup, hexClick]);
 
     const handleEndTurn = useCallback(() => {
         if (isAITurning || gameOverMessage) return;
@@ -529,75 +484,12 @@ const App: React.FC = () => {
         setIsAITurning(true);
         await new Promise(resolve => setTimeout(resolve, 500));
         
-        let newGs = deepCloneGameState(gs);
-        const aiPlayer = newGs.players.find(p => p.id === 2)!;
-        const playerCapital = Array.from(newGs.cities.values()).find(c => c.ownerId === 1);
-
-        const aiCities = Array.from(newGs.cities.values()).filter(c => c.ownerId === aiPlayer.id);
-        for (const city of aiCities) {
-            if (city.buildQueue.length === 0) {
-                const unitDef = UNIT_DEFINITIONS[UnitType.Tribesman];
-                if (aiPlayer.gold >= (unitDef.cost.gold ?? 0) && (city.localResources.wood ?? 0) >= (unitDef.cost.wood ?? 0)) {
-                    newGs = processProduceUnit(newGs, { unitType: UnitType.Tribesman, cityId: city.id });
-                }
-            }
-            if (city.garrison.length >= 2) {
-                let deployHexKey: string | null = null;
-                for (const dir of axialDirections) {
-                    const neighborPos = { q: city.position.q + dir.q, r: city.position.r + dir.r };
-                    const neighborKey = axialToString(neighborPos);
-                    const neighborHex = newGs.hexes.get(neighborKey);
-                    if (neighborHex && !neighborHex.armyId && !neighborHex.cityId) {
-                        deployHexKey = neighborKey;
-                        break;
-                    }
-                }
-                if (deployHexKey) {
-                    const deployInfo: ArmyDeploymentInfo = {
-                        sourceId: city.id,
-                        sourceType: 'city',
-                        unitsToMove: [{ unitType: UnitType.Tribesman, count: 2 }],
-                    };
-                    newGs = processDeployArmy(newGs, { deploymentInfo: deployInfo, targetPosition: stringToAxial(deployHexKey) });
-                }
-            }
-        }
+        const newGs = runAITurnLogic(gs);
         
-        const aiArmies = Array.from(newGs.armies.values()).filter(a => a.ownerId === aiPlayer.id);
-        for (const army of aiArmies) {
-             if (!newGs.armies.has(army.id) || army.isCamped) continue;
-            army.movementPoints = army.maxMovementPoints;
-            const attackable = findAttackableHexes(army.position, army, newGs);
-            if (attackable.size > 0) {
-                const targetHexKey = Array.from(attackable)[0];
-                newGs = processHexClick(newGs, { coords: stringToAxial(targetHexKey), selectedArmyId: army.id, reachableHexes: new Set(), attackableHexes: new Set([targetHexKey]), expandableHexes: new Set(), pathCosts: new Map(), selectedHex: army.position });
-                continue;
-            }
-
-            if (playerCapital && army.movementPoints > 0) {
-                let bestNeighbor: AxialCoords | null = null;
-                let minDistance = hexDistance(army.position, playerCapital.position);
-                const { reachable, costs } = calculateReachableHexes(army.position, army, newGs);
-                
-                for(const reachableHexKey of reachable) {
-                    const reachableCoords = stringToAxial(reachableHexKey);
-                    const dist = hexDistance(reachableCoords, playerCapital.position);
-                    if(dist < minDistance) {
-                        minDistance = dist;
-                        bestNeighbor = reachableCoords;
-                    }
-                }
-
-                if (bestNeighbor) {
-                    newGs = processHexClick(newGs, { coords: bestNeighbor, selectedArmyId: army.id, reachableHexes: reachable, attackableHexes: new Set(), expandableHexes: new Set(), pathCosts: costs, selectedHex: army.position });
-                }
-            }
-        }
-        
-        _setGameState(newGs); // Set the state after AI logic
-        endTurn(); // Now call endTurn on the updated state
+        _setGameState(newGs);
+        endTurn();
         setIsAITurning(false);
-    }, [findAttackableHexes, calculateReachableHexes, endTurn, _setGameState]);
+    }, [endTurn, _setGameState]);
 
     useEffect(() => {
         if (gameState && gameState.currentPlayerId === 2 && !isAITurning && !gameOverMessage) {
@@ -763,9 +655,20 @@ const App: React.FC = () => {
             {isCityScreenOpen && cityOnSelectedHex && <CityScreen cityId={cityOnSelectedHex.id} onClose={() => setIsCityScreenOpen(false)} />}
             {isCampScreenOpen && selectedCampId && <CampScreen armyId={selectedCampId} onClose={() => setIsCampScreenOpen(false)} />}
             {armyFormationSource && <CreateArmyScreen sourceId={armyFormationSource.sourceId} sourceType={armyFormationSource.sourceType} onClose={() => setArmyFormationSource(null)} onConfirmFormation={handleConfirmArmyFormation} />}
+            {transferInfo && <TransferScreen info={transferInfo} onClose={() => setTransferInfo(null)} />}
             {isResearchScreenOpen && <ResearchScreen onClose={() => setIsResearchScreenOpen(false)} />}
             {isCultureScreenOpen && <CultureScreen onClose={() => setIsCultureScreenOpen(false)} />}
             {isSettingsOpen && <SettingsMenu volume={volume} onVolumeChange={handleVolumeChange} isMuted={isMutedState} onMuteToggle={handleMuteToggle} onClose={() => setIsSettingsOpen(false)} />}
+            {justUnlockedTechId && (
+                <TechUnlockedScreen
+                    techId={justUnlockedTechId}
+                    onClose={() => setJustUnlockedTechId(null)}
+                    onChooseNewResearch={() => {
+                        setJustUnlockedTechId(null);
+                        setIsResearchScreenOpen(true);
+                    }}
+                />
+            )}
             {gameOverMessage && <div className="absolute inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center z-50"><h2 className="text-6xl font-bold text-white mb-4">Game Over</h2><p className="text-3xl text-yellow-400 mb-8">{gameOverMessage}</p><button onClick={() => setGameStarted(false)} className="px-8 py-4 bg-blue-600 hover:bg-blue-500 rounded-lg text-xl font-bold text-white transition-colors duration-200">Main Menu</button></div>}
         </>
     );
