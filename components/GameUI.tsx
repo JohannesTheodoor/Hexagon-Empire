@@ -100,32 +100,67 @@ const GameUI: React.FC<GameUIProps> = ({ selectedHex, selectedUnitId, selectedAr
     return `${nomadism} | ${gender} | ${military}`;
   }
   
-  const renderUnitInfo = (unit: Unit) => {
-    const unitDef = UNIT_DEFINITIONS[unit.type];
-    const owner = gameState.players.find(p => p.id === unit.ownerId);
+  const renderUnitGroupInfo = (selectedUnit: Unit) => {
+    const container = army || city;
+    if (!container) return <p>Unit container not found.</p>;
+
+    const allUnitIdsInContainer = 'garrison' in container ? container.garrison : container.unitIds;
+    const allUnitsInContainer = allUnitIdsInContainer.map(id => gameState.units.get(id)!).filter(Boolean) as Unit[];
+
+    const unitsOfType = allUnitsInContainer.filter(u => u.type === selectedUnit.type);
+
+    const subgroups = new Map<string, Unit[]>();
+    for (const unit of unitsOfType) {
+        const key = `${unit.hp}-${unit.isSick ? 'sick' : 'healthy'}`;
+        if (!subgroups.has(key)) {
+            subgroups.set(key, []);
+        }
+        subgroups.get(key)!.push(unit);
+    }
+
+    const unitDef = UNIT_DEFINITIONS[selectedUnit.type];
+    const sortedSubgroups = Array.from(subgroups.entries()).sort(([keyA], [keyB]) => {
+        const hpA = parseInt(keyA.split('-')[0], 10);
+        const hpB = parseInt(keyB.split('-')[0], 10);
+        return hpB - hpA;
+    });
 
     return (
         <div>
-            <h3 className="text-lg font-bold mb-1">{unit.type}</h3>
-            <p className="text-sm">Owner: <span style={{ color: owner?.color }}>{owner?.name}</span></p>
-            <div className="my-2">
-                <p className="text-sm font-semibold text-gray-300">HP: {unit.hp} / {unitDef.maxHp}</p>
-                <div className="w-full h-1.5 bg-gray-900 rounded-full overflow-hidden border border-black">
-                    <div className="bg-green-500 h-full rounded-full" style={{ width: `${(unit.hp / unitDef.maxHp) * 100}%` }}></div>
-                </div>
-            </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+            <h3 className="text-lg font-bold mb-1">{selectedUnit.type} ({unitsOfType.length} total)</h3>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm mb-2">
                 <p>Attack: <span className="font-semibold text-red-400">{unitDef.attack}</span></p>
                 <p>Defense: <span className="font-semibold text-blue-400">{unitDef.defense}</span></p>
                 <p>Gather: <span className="font-semibold text-green-400">{unitDef.foodGatherRate}</span></p>
                 <p>Consumes: <span className="font-semibold text-orange-400">{unitDef.foodConsumption}</span></p>
-                <p>Production: <span className="font-semibold text-yellow-400">{unitDef.productionYield}</span></p>
-                <p>Res. Capacity: <span className="font-semibold text-gray-300">{unitDef.carryCapacity}</span></p>
-                 {army && <p>Food Stored: <span className="font-semibold text-green-300">{unit.foodStored} / {unitDef.foodCarryCapacity}</span></p>}
+            </div>
+            <div className="space-y-2 border-t border-gray-600 pt-2 max-h-48 overflow-y-auto">
+                <h4 className="text-md font-semibold text-gray-300">Squads</h4>
+                {sortedSubgroups.map(([key, units]) => {
+                    const [hpStr, status] = key.split('-');
+                    const hp = parseInt(hpStr, 10);
+                    const isSick = status === 'sick';
+                    const healthPercentage = (hp / unitDef.maxHp) * 100;
+                    const barColor = healthPercentage > 50 ? 'bg-green-500' : healthPercentage > 25 ? 'bg-yellow-500' : 'bg-red-500';
+                    return (
+                        <div key={key} className="p-2 bg-gray-900/50 rounded">
+                            <p className="font-semibold flex items-center gap-2">
+                                {units.length}x {selectedUnit.type}
+                                {isSick && <SicknessIcon className="w-4 h-4 text-purple-400" title="Sick"/>}
+                            </p>
+                            <div className="flex items-center gap-2 text-sm text-gray-300">
+                                <span>HP: {hp} / {unitDef.maxHp}</span>
+                                <div className="flex-grow h-1.5 bg-gray-700 rounded-full">
+                                    <div className={`${barColor} h-full rounded-full`} style={{ width: `${healthPercentage}%` }}></div>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
-  }
+  };
 
   const renderArmyInfo = (army: Army) => {
     const unitsInArmy = army.unitIds.map(id => gameState.units.get(id)!);
@@ -160,7 +195,7 @@ const GameUI: React.FC<GameUIProps> = ({ selectedHex, selectedUnitId, selectedAr
     
     const risk = army.sicknessRisk ?? 0;
     const riskColor = risk > 50 ? 'bg-red-500' : risk > 20 ? 'bg-yellow-500' : 'bg-green-500';
-    const sickUnitCount = unitsInArmy.filter(u => u.hp < UNIT_DEFINITIONS[u.type].maxHp).length;
+    const sickUnitCount = unitsInArmy.filter(u => u.isSick).length;
 
     return (
         <div>
@@ -423,7 +458,7 @@ const GameUI: React.FC<GameUIProps> = ({ selectedHex, selectedUnitId, selectedAr
                 ? renderCampTileSelectionInfo() 
                 : <>
                     <h3 className="text-lg font-semibold mb-2 border-b border-gray-600 pb-1">Selection</h3>
-                    { selectedUnit ? renderUnitInfo(selectedUnit)
+                    { selectedUnit ? renderUnitGroupInfo(selectedUnit)
                     : army ? renderArmyInfo(army)
                     : city ? renderCityInfo(city)
                     : hex ? renderHexInfo(hex)

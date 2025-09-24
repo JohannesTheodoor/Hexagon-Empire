@@ -39,6 +39,19 @@ export const TECH_TREE: Record<string, Technology> = {
         ],
         tier: 2,
     },
+    'obsidian_knapping': {
+        id: 'obsidian_knapping',
+        name: 'Obsidian Knapping',
+        description: 'Master the art of shaping volcanic glass into deadly points and sharp edges. Unlocks Stone Warriors and the Toolmaker\'s Shelter.',
+        narrative: "The black rock, once a mere curiosity, reveals its true nature. With careful, practiced strikes, your artisans learn to flake away its surface, creating edges sharper than any tooth or claw. This breakthrough arms your warriors with deadly new weapons and provides your craftsmen with superior tools, marking a new age of deadly innovation.",
+        cost: 15,
+        prerequisites: ['fire_mastery'],
+        effects: [
+            { type: TechEffectType.UnlockUnit, payload: UnitType.StoneWarrior },
+            { type: TechEffectType.UnlockBuilding, payload: CampBuildingType.ToolmakersShelter }
+        ],
+        tier: 2,
+    },
     // TIER 3
     'fishing': {
         id: 'fishing',

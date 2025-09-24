@@ -12,19 +12,20 @@ import CreateArmyScreen from './components/CreateArmyScreen';
 import TransferScreen from './components/TransferScreen';
 import StartScreen from './components/StartScreen';
 import TechUnlockedScreen from './components/TechUnlockedScreen';
+import BattleScreen from './components/BattleScreen';
+import BattleReportScreen from './components/BattleReportScreen';
 // FIX: Added City to imports to allow for explicit type annotation.
 import { GameState, AxialCoords, UnitType, Army, ArmyDeploymentInfo, Gender, CampBuildingType, Unit, UnitSize, City, TransferInfo } from './types';
 import { MAP_SIZES, TERRAIN_DEFINITIONS, UNIT_DEFINITIONS, axialDirections, CITY_VISION_RANGE, UNIT_VISION_RANGE, CAMP_INFLUENCE_RANGE, CAMP_VISION_RANGE, CAMP_BUILDING_DEFINITIONS } from './constants';
 import { axialToString, stringToAxial, getHexesInRange, hexDistance, axialToPixel, PriorityQueue } from './utils/hexUtils';
 import { playSound, setVolume, setMuted, ensureAudioInitialized } from './utils/soundManager';
-import { deepCloneGameState } from './utils/gameStateUtils';
 import { useGameStore } from './store/gameStore';
 import { 
-    processHexClick,
     calculateReachableHexes, 
     findAttackableHexes
 } from './utils/gameLogic';
 import { runAITurnLogic } from './utils/aiLogic';
+import { deepCloneGameState } from './utils/gameStateUtils';
 
 type WorldSize = 'small' | 'medium' | 'large';
 
@@ -32,7 +33,10 @@ const App: React.FC = () => {
     const gameState = useGameStore(state => state.gameState);
     const startGame = useGameStore(state => state.startGame);
     const endTurn = useGameStore(state => state.endTurn);
-    const hexClick = useGameStore(state => state.hexClick);
+    const moveArmy = useGameStore(state => state.moveArmy);
+    const claimTile = useGameStore(state => state.claimTile);
+    const autoBattle = useGameStore(state => state.autoBattle);
+    const dismissBattleReport = useGameStore(state => state.dismissBattleReport);
     const finalizeCampSetup = useGameStore(state => state.finalizeCampSetup);
     const breakCamp = useGameStore(state => state.breakCamp);
     const deployArmy = useGameStore(state => state.deployArmy);
@@ -74,6 +78,7 @@ const App: React.FC = () => {
     const [armyFormationSource, setArmyFormationSource] = useState<{ sourceId: string; sourceType: 'city' | 'army' } | null>(null);
     const [armyDeploymentInfo, setArmyDeploymentInfo] = useState<ArmyDeploymentInfo | null>(null);
     const [transferInfo, setTransferInfo] = useState<TransferInfo | null>(null);
+    const [battleInfo, setBattleInfo] = useState<{ attackerId: string; defenderId: string; defenderType: 'army' | 'city' } | null>(null);
     const [volume, setVolumeState] = useState(0.5);
     const [isMutedState, setIsMutedState] = useState(false);
     const [justUnlockedTechId, setJustUnlockedTechId] = useState<string | null>(null);
@@ -106,13 +111,13 @@ const App: React.FC = () => {
 
         if (unnotifiedTech) {
             // Check if any other modal is open to prevent overlap
-            if (!isCityScreenOpen && !isCampScreenOpen && !isResearchScreenOpen && !isCultureScreenOpen && !isSettingsOpen && !armyFormationSource && !transferInfo && !justUnlockedTechId) {
+            if (!isCityScreenOpen && !isCampScreenOpen && !isResearchScreenOpen && !isCultureScreenOpen && !isSettingsOpen && !armyFormationSource && !transferInfo && !justUnlockedTechId && !battleInfo && !gameState.battleReport) {
                 setJustUnlockedTechId(unnotifiedTech);
                 // Important: Update the notified set so this doesn't trigger again for the same tech
                 setNotifiedTechs(prev => new Set(prev).add(unnotifiedTech));
             }
         }
-    }, [gameState, isAITurning, notifiedTechs, isCityScreenOpen, isCampScreenOpen, isResearchScreenOpen, isCultureScreenOpen, isSettingsOpen, armyFormationSource, transferInfo, justUnlockedTechId]);
+    }, [gameState, isAITurning, notifiedTechs, isCityScreenOpen, isCampScreenOpen, isResearchScreenOpen, isCultureScreenOpen, isSettingsOpen, armyFormationSource, transferInfo, justUnlockedTechId, battleInfo]);
 
 
     const handleVolumeChange = (newVolume: number) => {
@@ -187,7 +192,7 @@ const App: React.FC = () => {
         let animationFrameId: number;
         const gameLoop = () => {
             const rect = gameContainerRef.current?.getBoundingClientRect();
-            if (rect && !isPanning && !isCityScreenOpen && !isResearchScreenOpen && !isSettingsOpen && !armyFormationSource && !armyDeploymentInfo && !isCultureScreenOpen && !transferInfo) {
+            if (rect && !isPanning && !isCityScreenOpen && !isResearchScreenOpen && !isSettingsOpen && !armyFormationSource && !armyDeploymentInfo && !isCultureScreenOpen && !transferInfo && !battleInfo && !gameState?.battleReport) {
                 const { x, y } = mousePosRef.current;
                 const edgeSize = 40;
                 const panSpeed = 10;
@@ -210,7 +215,7 @@ const App: React.FC = () => {
         };
         animationFrameId = requestAnimationFrame(gameLoop);
         return () => cancelAnimationFrame(animationFrameId);
-    }, [isPanning, isCityScreenOpen, isResearchScreenOpen, isSettingsOpen, armyFormationSource, armyDeploymentInfo, isCultureScreenOpen, transferInfo]);
+    }, [isPanning, isCityScreenOpen, isResearchScreenOpen, isSettingsOpen, armyFormationSource, armyDeploymentInfo, isCultureScreenOpen, transferInfo, battleInfo, gameState?.battleReport]);
 
     const handleGlobalMouseMove = useCallback((e: MouseEvent) => {
         mousePosRef.current = { x: e.clientX, y: e.clientY };
@@ -221,9 +226,9 @@ const App: React.FC = () => {
         return () => window.removeEventListener('mousemove', handleGlobalMouseMove);
     }, [handleGlobalMouseMove]);
 
-    const handleStartGame = useCallback((size: WorldSize, seed?: string) => {
+    const handleStartGame = useCallback((size: WorldSize, numAIPlayers: number, seed?: string) => {
         const { width, height } = MAP_SIZES[size];
-        startGame(width, height, seed);
+        startGame(width, height, numAIPlayers, seed);
         setGameStarted(true);
         playSound('endTurn');
         setGameOverMessage(null);
@@ -384,7 +389,7 @@ const App: React.FC = () => {
     }, [finalizeCampSetup]);
 
     const handleHexClick = useCallback((coords: AxialCoords) => {
-        if (!gameState || isAITurning || gameOverMessage || isCityScreenOpen || armyFormationSource || isCampScreenOpen || isCultureScreenOpen || transferInfo || justUnlockedTechId) return;
+        if (!gameState || isAITurning || gameOverMessage || isCityScreenOpen || armyFormationSource || isCampScreenOpen || isCultureScreenOpen || transferInfo || justUnlockedTechId || battleInfo || gameState.battleReport) return;
         
         const clickedHexKey = axialToString(coords);
         const clickedHex = gameState.hexes.get(clickedHexKey);
@@ -427,7 +432,19 @@ const App: React.FC = () => {
             return;
         }
 
-        // Intercept for transfer screen
+        // Action dispatcher based on context
+        if (attackableHexes.has(clickedHexKey) && selectedArmyId) {
+            const defenderArmyId = clickedHex.armyId;
+            const defenderCityId = clickedHex.cityId;
+            
+            if (defenderArmyId) {
+                setBattleInfo({ attackerId: selectedArmyId, defenderId: defenderArmyId, defenderType: 'army' });
+            } else if (defenderCityId) {
+                setBattleInfo({ attackerId: selectedArmyId, defenderId: defenderCityId, defenderType: 'city' });
+            }
+            return;
+        }
+
         if (selectedArmyId && reachableHexes.has(clickedHexKey)) {
             const selectedArmy = gameState.armies.get(selectedArmyId);
             if (selectedArmy) {
@@ -450,28 +467,27 @@ const App: React.FC = () => {
                     }
                 }
             }
+            // If it's reachable but not a merge target, it's a move.
+            playSound('move');
+            const cost = pathCosts.get(clickedHexKey) ?? 99;
+            moveArmy({ armyId: selectedArmyId, targetCoords: coords, pathCost: cost });
+            selectHex(coords); // Move selection with army
+            return;
         }
 
-        const selectedArmy = selectedArmyId ? gameState.armies.get(selectedArmyId) : null;
-        const isActionableClick = (selectedArmy && selectedArmy.ownerId === gameState.currentPlayerId && (attackableHexes.has(clickedHexKey) || reachableHexes.has(clickedHexKey))) || expandableHexes.has(clickedHexKey);
-
-        if (isActionableClick) {
-            if (expandableHexes.has(clickedHexKey)) playSound('upgrade');
-            else if (attackableHexes.has(clickedHexKey)) playSound('attack');
-            else if (reachableHexes.has(clickedHexKey)) {
-                playSound('move');
+        if (expandableHexes.has(clickedHexKey) && selectedHex) {
+            const cityIdOnSelected = gameState.hexes.get(axialToString(selectedHex))?.cityId;
+            if(cityIdOnSelected) {
+                playSound('upgrade');
+                claimTile({ cityId: cityIdOnSelected, tileKey: clickedHexKey });
+                return;
             }
-            hexClick({ coords, selectedArmyId, reachableHexes, attackableHexes, expandableHexes, pathCosts, selectedHex });
-            if (attackableHexes.has(clickedHexKey)) {
-                selectHex(null);
-            } else {
-                selectHex(coords);
-            }
-        } else {
-            selectHex(coords);
         }
+        
+        // Default behavior if no other action is taken
+        selectHex(coords);
 
-    }, [gameState, selectedHex, selectedArmyId, reachableHexes, attackableHexes, expandableHexes, deployableHexes, pathCosts, armyDeploymentInfo, campTileSelectionInfo, isAITurning, gameOverMessage, selectHex, isCityScreenOpen, isCampScreenOpen, armyFormationSource, isCultureScreenOpen, transferInfo, justUnlockedTechId, handleFinalizeCampSetup, hexClick]);
+    }, [gameState, selectedHex, selectedArmyId, reachableHexes, attackableHexes, expandableHexes, deployableHexes, pathCosts, armyDeploymentInfo, campTileSelectionInfo, isAITurning, gameOverMessage, selectHex, isCityScreenOpen, isCampScreenOpen, armyFormationSource, isCultureScreenOpen, transferInfo, justUnlockedTechId, battleInfo, handleFinalizeCampSetup, moveArmy, claimTile]);
 
     const handleEndTurn = useCallback(() => {
         if (isAITurning || gameOverMessage) return;
@@ -486,13 +502,32 @@ const App: React.FC = () => {
         
         const newGs = runAITurnLogic(gs);
         
+        // If the AI initiated a battle against the player, show the battle screen and pause the turn.
+        if (newGs.pendingBattle) {
+            const defender = newGs.pendingBattle.defenderType === 'army' 
+                ? newGs.armies.get(newGs.pendingBattle.defenderId)
+                : newGs.cities.get(newGs.pendingBattle.defenderId);
+            
+            if (defender?.ownerId === 1) {
+                setBattleInfo(newGs.pendingBattle);
+                // Clear the pending battle from the state immediately after setting it for the UI
+                const stateWithoutPendingBattle = deepCloneGameState(newGs);
+                delete stateWithoutPendingBattle.pendingBattle;
+                _setGameState(stateWithoutPendingBattle);
+                // The turn is now paused, waiting for the player to resolve the battle.
+                // isAITurning remains true. endTurn() is NOT called.
+                return; 
+            }
+        }
+        
+        // If no player interaction is required, update state and proceed to next turn.
         _setGameState(newGs);
         endTurn();
         setIsAITurning(false);
     }, [endTurn, _setGameState]);
 
     useEffect(() => {
-        if (gameState && gameState.currentPlayerId === 2 && !isAITurning && !gameOverMessage) {
+        if (gameState && gameState.currentPlayerId > 1 && !isAITurning && !gameOverMessage && !gameState.battleReport) {
             runAITurn(gameState);
         }
     }, [gameState, isAITurning, runAITurn, gameOverMessage]);
@@ -666,6 +701,34 @@ const App: React.FC = () => {
                     onChooseNewResearch={() => {
                         setJustUnlockedTechId(null);
                         setIsResearchScreenOpen(true);
+                    }}
+                />
+            )}
+            {battleInfo && (
+                <BattleScreen 
+                    battleInfo={battleInfo}
+                    onClose={() => { // Retreat
+                        if (isAITurning) return; // Can't retreat when defending
+                        playSound('error');
+                        setBattleInfo(null);
+                    }}
+                    onResolve={() => {
+                        playSound('attack');
+                        autoBattle(battleInfo);
+                        setBattleInfo(null);
+                    }}
+                />
+            )}
+            {gameState.battleReport && (
+                <BattleReportScreen
+                    report={gameState.battleReport}
+                    onClose={() => {
+                        dismissBattleReport();
+                        selectHex(null);
+                        if (isAITurning) {
+                            endTurn();
+                            setIsAITurning(false);
+                        }
                     }}
                 />
             )}

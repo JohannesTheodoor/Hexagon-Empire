@@ -1,3 +1,5 @@
+
+
 export enum TerrainType {
   Plains,
   Forest,
@@ -35,6 +37,7 @@ export enum UnitType {
     Tribeswoman = 'Tribeswoman',
     Child = 'Child',
     Shaman = 'Shaman',
+    StoneWarrior = 'Stone Warrior',
 }
 
 export enum UnitSize {
@@ -83,6 +86,7 @@ export enum CampBuildingType {
     DryingRack = 'Drying Rack',
     HealersTent = "Healer's Tent",
     Tent = 'Tent',
+    ToolmakersShelter = "Toolmaker's Shelter",
 }
 
 export interface BuildingDefinition {
@@ -106,6 +110,7 @@ export interface CampBuildingDefinition {
     visionBonus?: number;
     foodGatherBonus?: number;
     storageBonus?: number;
+    // FIX: Add foodStorageBonus to support buildings that only increase food storage.
     foodStorageBonus?: number;
     researchBonus?: number;
     culturePointBonus?: number;
@@ -113,6 +118,9 @@ export interface CampBuildingDefinition {
     diseaseRiskReduction?: number;
     requiredTech?: string;
     housingCapacity?: number;
+    productionBonus?: number;
+    gatherBonus?: number;
+    attackBonusUnits?: { unitType: UnitType; bonus: number }[];
 }
 
 export interface BuildQueueItem {
@@ -150,6 +158,9 @@ export interface Unit {
   foodStored: number;
   age?: number;
   gender: Gender;
+  isSick?: boolean;
+  attackBonus?: number;
+  defenseBonus?: number;
 }
 
 export interface SicknessRiskDetails {
@@ -235,6 +246,12 @@ export interface PlayerCulture {
     unlockedAspects: string[];
 }
 
+export enum AIPersonality {
+    Aggressive = 'Aggressive',
+    Defensive = 'Defensive',
+    Balanced = 'Balanced',
+}
+
 export interface Player {
   id: number;
   name: string;
@@ -249,6 +266,26 @@ export interface Player {
   actionsThisTurn: {
       attacks: number;
   };
+  personality?: AIPersonality;
+}
+
+export interface BattleReportUnit {
+  unitType: UnitType;
+  count: number;
+}
+
+export interface BattleParticipantReport {
+    name: string;
+    color: string;
+    initialUnits: BattleReportUnit[];
+    lostUnits: BattleReportUnit[];
+    remainingUnits: BattleReportUnit[];
+    isWinner: boolean;
+}
+
+export interface BattleReport {
+    attacker: BattleParticipantReport;
+    defender: BattleParticipantReport;
 }
 
 export interface GameState {
@@ -261,6 +298,12 @@ export interface GameState {
   turn: number;
   mapWidth: number;
   mapHeight: number;
+  pendingBattle?: {
+    attackerId: string;
+    defenderId: string;
+    defenderType: 'army' | 'city';
+  } | null;
+  battleReport?: BattleReport | null;
 }
 
 export interface ArmyDeploymentInfo {

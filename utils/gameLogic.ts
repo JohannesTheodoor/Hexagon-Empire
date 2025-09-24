@@ -1,4 +1,4 @@
-import { GameState, CampBuildingType, TerrainType, City, Army, BuildQueueItem, UnitType, BuildingType, Unit, Gender, UnitDefinition, ResourceCost, Player, Hex, AxialCoords, ArmyDeploymentInfo, SicknessRiskDetails, UnitSize, TransferInfo } from '../types';
+import { GameState, CampBuildingType, TerrainType, City, Army, BuildQueueItem, UnitType, BuildingType, Unit, Gender, UnitDefinition, ResourceCost, Player, Hex, AxialCoords, ArmyDeploymentInfo, SicknessRiskDetails, UnitSize, TransferInfo, AIPersonality } from '../types';
 import { UNIT_DEFINITIONS, STARVATION_DAMAGE, CAMP_BUILDING_DEFINITIONS, GATHERING_YIELD_PER_POINT, TERRAIN_DEFINITIONS, BASE_CITY_FOOD_STORAGE, BUILDING_DEFINITIONS, CAMP_XP_PER_TURN, CAMP_XP_PER_UNIT_PROD_COST, CAMP_XP_PER_BUILDING_PROD_COST, CAMP_XP_PER_NEW_MEMBER, INITIAL_XP_TO_NEXT_LEVEL, XP_LEVEL_MULTIPLIER, DISEASE_RISK_BASE, DISEASE_STAGNATION_INCREASE_PER_TURN, DISEASE_DAMAGE, CITY_HP, INITIAL_CITY_POPULATION, axialDirections, BUY_INFLUENCE_TILE_COST, CAMP_DEFENSE_BONUS, DISEASE_OVERCROWDING_THRESHOLD, DISEASE_OVERCROWDING_RISK_PER_UNIT, SHAMAN_RISK_REDUCTION_FLAT, MAX_SHAMAN_FLAT_REDUCTION } from '../constants';
 import { TECH_TREE } from '../techtree';
 import { CULTURAL_ASPECTS } from '../culture';
@@ -6,8 +6,9 @@ import { axialToString, getHexesInRange, hexDistance, stringToAxial, PriorityQue
 import { deepCloneGameState } from './gameStateUtils';
 import { generateMap } from './worldGeneration';
 import { generateId } from './gameStateUtils';
+import { generateArmyName } from './nameGenerator';
 
-export function initializeGameState(width: number, height: number, seed?: string): GameState {
+export function initializeGameState(width: number, height: number, numAIPlayers: number, seed?: string): GameState {
     const hexes = generateMap(width, height, seed);
         
     const findValidPlacement = (startPos: AxialCoords, maxRadius: number): AxialCoords => {
@@ -31,8 +32,27 @@ export function initializeGameState(width: number, height: number, seed?: string
 
     const players: Player[] = [
         { id: 1, name: 'Player 1', color: '#3b82f6', gold: 50, researchPoints: 0, culturePoints: 0, unlockedTechs: [], currentResearchId: 'fire_mastery', researchProgress: 0, culture: { nomadism: 0, genderRoles: 0, militarism: 0, unlockedAspects: [] }, actionsThisTurn: { attacks: 0 } },
-        { id: 2, name: 'AI Opponent', color: '#ef4444', gold: 50, researchPoints: 0, culturePoints: 0, unlockedTechs: [], currentResearchId: 'fire_mastery', researchProgress: 0, culture: { nomadism: 0, genderRoles: 0, militarism: 0, unlockedAspects: [] }, actionsThisTurn: { attacks: 0 } },
     ];
+    
+    const aiColors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#a855f7']; // Red, Orange, Yellow, Lime, Purple
+    const personalities = [AIPersonality.Aggressive, AIPersonality.Defensive, AIPersonality.Balanced];
+    for (let i = 0; i < numAIPlayers; i++) {
+        const personality = personalities[Math.floor(Math.random() * personalities.length)];
+        players.push({
+            id: i + 2,
+            name: `AI ${i + 1} (${personality})`,
+            color: aiColors[i % aiColors.length],
+            gold: 50,
+            researchPoints: 0,
+            culturePoints: 0,
+            unlockedTechs: [],
+            currentResearchId: 'fire_mastery',
+            researchProgress: 0,
+            culture: { nomadism: 0, genderRoles: 0, militarism: 0, unlockedAspects: [] },
+            personality: personality,
+            actionsThisTurn: { attacks: 0 },
+        });
+    }
     
     const units = new Map<string, Unit>();
     const cities = new Map<string, City>();
@@ -41,53 +61,90 @@ export function initializeGameState(width: number, height: number, seed?: string
         return garrisonUnits.reduce((sum, unit) => sum + UNIT_DEFINITIONS[unit.type].carryCapacity, 0);
     };
 
-    // Player 1 setup
-    const p1DesiredPos = { q: Math.floor(width * 0.2), r: Math.floor(height * 0.5) };
-    const p1CityPos = findValidPlacement(p1DesiredPos, 15);
-    const p1CityKey = axialToString(p1CityPos);
-    const p1CityId = generateId();
-    let p1StartGarrisonUnits: Unit[] = [];
+    const playerPositions: AxialCoords[] = [];
+    const numTotalPlayers = players.length;
+    const centerQ = width / 2;
+    const centerR = height / 2;
+    const angleOffset = Math.random() * Math.PI * 2;
+    const radius = Math.min(width, height) * 0.35;
 
-    for (let i = 0; i < 5; i++) {
-        const manDef = UNIT_DEFINITIONS[UnitType.Tribesman];
-        const manId = generateId();
-        const manUnit = { id: manId, type: UnitType.Tribesman, ownerId: 1, hp: manDef.maxHp, foodStored: 0, gender: Gender.Male };
-        units.set(manId, manUnit);
-        p1StartGarrisonUnits.push(manUnit);
-
-        const womanDef = UNIT_DEFINITIONS[UnitType.Tribeswoman];
-        const womanId = generateId();
-        const womanUnit = { id: womanId, type: UnitType.Tribeswoman, ownerId: 1, hp: womanDef.maxHp, foodStored: 0, gender: Gender.Female };
-        units.set(womanId, womanUnit);
-        p1StartGarrisonUnits.push(womanUnit);
+    for (let i = 0; i < numTotalPlayers; i++) {
+        const angle = ((2 * Math.PI / numTotalPlayers) * i) + angleOffset;
+        let finalPos: AxialCoords;
+        let attempts = 0;
+        let isTooClose;
+        
+        do {
+            isTooClose = false;
+            const jitterRadius = radius * (1 + (Math.random() - 0.5) * 0.2 * (attempts / 10)); // Jitter increases with attempts
+            const jitterAngle = angle + (Math.random() - 0.5) * 0.3 * (attempts / 10);
+            
+            const desiredPos = {
+                // Approximate conversion from cartesian to axial
+                q: Math.round(centerQ + jitterRadius * (2/3) * Math.cos(jitterAngle)),
+                r: Math.round(centerR + jitterRadius * (-1/3 * Math.cos(jitterAngle) + Math.sqrt(3)/3 * Math.sin(jitterAngle))),
+            };
+            
+            finalPos = findValidPlacement(desiredPos, 15);
+            
+            for (const existingPos of playerPositions) {
+                if (hexDistance(finalPos, existingPos) < 10) { // Ensure minimum distance
+                    isTooClose = true;
+                    break;
+                }
+            }
+            attempts++;
+        } while (isTooClose && attempts < 20);
+        
+        playerPositions.push(finalPos);
     }
-    const p1City: City = { id: p1CityId, name: 'Capital 1', ownerId: 1, position: p1CityPos, hp: CITY_HP, maxHp: CITY_HP, population: p1StartGarrisonUnits.length, food: 50, foodStorageCapacity: BASE_CITY_FOOD_STORAGE, level: 1, buildings: [], buildQueue: [], garrison: p1StartGarrisonUnits.map(u=>u.id), controlledTiles: [p1CityKey], pendingInfluenceExpansions: 0, nextPopulationMilestone: INITIAL_CITY_POPULATION * 2, productionFocus: 100, resourceFocus: { wood: false, stone: false, hides: false, obsidian: false }, isConnectedToNetwork: true, localResources: { wood: 0, stone: 0, hides: 0, obsidian: 0 }, storageCapacity: calculateInitialCityCapacity(p1StartGarrisonUnits) };
-    cities.set(p1CityId, p1City);
-    hexes.get(p1CityKey)!.cityId = p1CityId;
 
-    // Player 2 (AI) setup
-    const p2DesiredPos = { q: Math.floor(width * 0.8), r: Math.floor(height * 0.5) };
-    const p2CityPos = findValidPlacement(p2DesiredPos, 15);
-    const p2CityKey = axialToString(p2CityPos);
-    const p2CityId = generateId();
-    let p2StartGarrisonUnits: Unit[] = [];
+    players.forEach((player, index) => {
+        const cityPos = playerPositions[index];
+        const cityKey = axialToString(cityPos);
+        const cityId = generateId();
+        let startGarrisonUnits: Unit[] = [];
 
-    for (let i = 0; i < 5; i++) {
-        const manDef = UNIT_DEFINITIONS[UnitType.Tribesman];
-        const manId = generateId();
-        const manUnit = { id: manId, type: UnitType.Tribesman, ownerId: 2, hp: manDef.maxHp, foodStored: 0, gender: Gender.Male };
-        units.set(manId, manUnit);
-        p2StartGarrisonUnits.push(manUnit);
+        for (let j = 0; j < 5; j++) {
+            const manDef = UNIT_DEFINITIONS[UnitType.Tribesman];
+            const manId = generateId();
+            const manUnit = { id: manId, type: UnitType.Tribesman, ownerId: player.id, hp: manDef.maxHp, foodStored: 0, gender: Gender.Male, attackBonus: 0, defenseBonus: 0 };
+            units.set(manId, manUnit);
+            startGarrisonUnits.push(manUnit);
 
-        const womanDef = UNIT_DEFINITIONS[UnitType.Tribeswoman];
-        const womanId = generateId();
-        const womanUnit = { id: womanId, type: UnitType.Tribeswoman, ownerId: 2, hp: womanDef.maxHp, foodStored: 0, gender: Gender.Female };
-        units.set(womanId, womanUnit);
-        p2StartGarrisonUnits.push(womanUnit);
-    }
-    const p2City: City = { id: p2CityId, name: 'Capital 2', ownerId: 2, position: p2CityPos, hp: CITY_HP, maxHp: CITY_HP, population: p2StartGarrisonUnits.length, food: 50, foodStorageCapacity: BASE_CITY_FOOD_STORAGE, level: 1, buildings: [], buildQueue: [], garrison: p2StartGarrisonUnits.map(u => u.id), controlledTiles: [p2CityKey], pendingInfluenceExpansions: 0, nextPopulationMilestone: INITIAL_CITY_POPULATION * 2, productionFocus: 100, resourceFocus: { wood: false, stone: false, hides: false, obsidian: false }, isConnectedToNetwork: true, localResources: { wood: 0, stone: 0, hides: 0, obsidian: 0 }, storageCapacity: calculateInitialCityCapacity(p2StartGarrisonUnits) };
-    cities.set(p2CityId, p2City);
-    hexes.get(p2CityKey)!.cityId = p2CityId;
+            const womanDef = UNIT_DEFINITIONS[UnitType.Tribeswoman];
+            const womanId = generateId();
+            const womanUnit = { id: womanId, type: UnitType.Tribeswoman, ownerId: player.id, hp: womanDef.maxHp, foodStored: 0, gender: Gender.Female, attackBonus: 0, defenseBonus: 0 };
+            units.set(womanId, womanUnit);
+            startGarrisonUnits.push(womanUnit);
+        }
+        
+        const city: City = { 
+            id: cityId, 
+            name: `Capital ${player.id}`, 
+            ownerId: player.id, 
+            position: cityPos, 
+            hp: CITY_HP, 
+            maxHp: CITY_HP, 
+            population: startGarrisonUnits.length, 
+            food: 50, 
+            foodStorageCapacity: BASE_CITY_FOOD_STORAGE, 
+            level: 1, 
+            buildings: [], 
+            buildQueue: [], 
+            garrison: startGarrisonUnits.map(u=>u.id), 
+            controlledTiles: [cityKey], 
+            pendingInfluenceExpansions: 0, 
+            nextPopulationMilestone: INITIAL_CITY_POPULATION * 2, 
+            productionFocus: 100, 
+            resourceFocus: { wood: false, stone: false, hides: false, obsidian: false }, 
+            isConnectedToNetwork: true, 
+            localResources: { wood: 0, stone: 0, hides: 0, obsidian: 0 }, 
+            storageCapacity: calculateInitialCityCapacity(startGarrisonUnits) 
+        };
+        cities.set(cityId, city);
+        hexes.get(cityKey)!.cityId = cityId;
+    });
 
     return {
         hexes, units, cities, players,
@@ -96,6 +153,7 @@ export function initializeGameState(width: number, height: number, seed?: string
         turn: 1,
         mapWidth: width,
         mapHeight: height,
+        pendingBattle: null,
     };
 }
 
@@ -249,131 +307,41 @@ export const findAttackableHexes = (start: AxialCoords, army: Army, gs: GameStat
     return attackable;
 };
 
-export function processHexClick(
-    gs: GameState, 
-    payload: { 
-        coords: AxialCoords; 
-        selectedArmyId: string | null;
-        reachableHexes: Set<string>;
-        attackableHexes: Set<string>;
-        expandableHexes: Set<string>;
-        pathCosts: Map<string, number>;
-        selectedHex: AxialCoords | null;
-    }
-): GameState {
+export function processMoveArmy(gs: GameState, payload: { armyId: string; targetCoords: AxialCoords; pathCost: number; }): GameState {
     const newGs = deepCloneGameState(gs);
-    const { coords, selectedArmyId, reachableHexes, attackableHexes, expandableHexes, pathCosts, selectedHex } = payload;
+    const { armyId, targetCoords, pathCost } = payload;
     
-    const clickedHexKey = axialToString(coords);
-    const clickedHex = newGs.hexes.get(clickedHexKey);
-    if (!clickedHex) return newGs;
+    const army = newGs.armies.get(armyId)!;
+    const startHex = newGs.hexes.get(axialToString(army.position))!;
+    startHex.armyId = undefined;
+    startHex.armyPresenceTurns = 0;
+    
+    const destinationHex = newGs.hexes.get(axialToString(targetCoords))!;
+    destinationHex.armyId = army.id;
+    
+    army.position = targetCoords;
+    army.movementPoints -= pathCost;
 
-    // Territory Expansion Logic
-    if (expandableHexes.has(clickedHexKey) && selectedHex) {
-        const selectedHexKey = axialToString(selectedHex);
-        const cityId = newGs.hexes.get(selectedHexKey)?.cityId;
-        const city = cityId ? newGs.cities.get(cityId) : null;
-        if (city && city.ownerId === newGs.currentPlayerId && city.pendingInfluenceExpansions > 0) {
-            city.controlledTiles = [...city.controlledTiles, clickedHexKey];
-            city.pendingInfluenceExpansions -= 1;
-            return newGs;
-        }
-    }
-
-    const selectedArmy = selectedArmyId ? newGs.armies.get(selectedArmyId) : null;
-    if (selectedArmy && selectedArmy.ownerId === newGs.currentPlayerId) {
-        // ATTACK
-        if (attackableHexes.has(clickedHexKey)) {
-            const attackerArmy = selectedArmy;
-            const defenderHex = newGs.hexes.get(clickedHexKey)!;
-            const defenderArmyId = defenderHex.armyId;
-            
-            const playerToUpdate = newGs.players.find(p => p.id === attackerArmy.ownerId)!;
-            playerToUpdate.culture.militarism = Math.min(100, playerToUpdate.culture.militarism + 2);
-            playerToUpdate.actionsThisTurn.attacks += 1;
-
-            if (defenderArmyId) {
-                const defenderArmy = newGs.armies.get(defenderArmyId)!;
-                const attackerUnit = newGs.units.get(attackerArmy.unitIds[0]);
-                const defenderUnit = newGs.units.get(defenderArmy.unitIds[0]);
-                
-                if (attackerUnit && defenderUnit) {
-                    const attackerUnitDef = UNIT_DEFINITIONS[attackerUnit.type];
-                    const defenderUnitDef = UNIT_DEFINITIONS[defenderUnit.type];
-                    
-                    const terrainBonus = TERRAIN_DEFINITIONS[defenderHex.terrain].defenseBonus;
-                    let campBonus = 0;
-                    if (defenderArmy.isCamped) {
-                        campBonus = CAMP_DEFENSE_BONUS;
-                        if (defenderArmy.buildings?.includes(CampBuildingType.Palisade)) {
-                            campBonus += CAMP_BUILDING_DEFINITIONS[CampBuildingType.Palisade].defenseBonus!;
-                        }
-                    }
-
-                    const damageToDefender = Math.max(0, attackerUnitDef.attack - (defenderUnitDef.defense + terrainBonus + campBonus));
-                    defenderUnit.hp -= damageToDefender;
-
-                    const damageToAttacker = Math.max(0, defenderUnitDef.attack - attackerUnitDef.defense);
-                    attackerUnit.hp -= damageToAttacker;
-                    
-                    if (defenderUnit.hp <= 0) {
-                        defenderArmy.unitIds.shift();
-                        newGs.units.delete(defenderUnit.id);
-                    }
-                    if (attackerUnit.hp <= 0) {
-                        attackerArmy.unitIds.shift();
-                        newGs.units.delete(attackerUnit.id);
-                    }
-                }
-                
-                if (defenderArmy.unitIds.length === 0) {
-                    newGs.armies.delete(defenderArmy.id);
-                    defenderHex.armyId = undefined;
-                }
-            }
-            
-            attackerArmy.movementPoints = 0;
-            if (attackerArmy.unitIds.length === 0) {
-                newGs.armies.delete(attackerArmy.id);
-                const startHex = newGs.hexes.get(axialToString(attackerArmy.position))!;
-                startHex.armyId = undefined;
-            }
-            
-            return newGs;
-        } 
-        // MOVE (No merge/garrison logic here anymore, handled by UI)
-        else if (reachableHexes.has(clickedHexKey)) {
-            const startHex = newGs.hexes.get(axialToString(selectedArmy.position))!;
-            startHex.armyId = undefined;
-            startHex.armyPresenceTurns = 0; // Reset timer on departure hex
-            
-            const destinationHex = newGs.hexes.get(clickedHexKey)!;
-            destinationHex.armyId = selectedArmy.id;
-            
-            const moveCost = pathCosts.get(clickedHexKey);
-            let newMovementPoints;
-            if (moveCost !== undefined && selectedArmy.movementPoints >= moveCost) {
-                newMovementPoints = selectedArmy.movementPoints - moveCost;
-            } else if (selectedArmy.movementPoints > 0 && hexDistance(selectedArmy.position, coords) === 1) {
-                newMovementPoints = 0;
-            } else {
-                newMovementPoints = 0;
-            }
-            
-            selectedArmy.position = coords;
-            selectedArmy.movementPoints = newMovementPoints;
-
-            // Update sickness risk on move
-            const armyUnits = selectedArmy.unitIds.map(id => newGs.units.get(id)!);
-            const { risk, details } = getSicknessRisk(selectedArmy, armyUnits, destinationHex);
-            selectedArmy.sicknessRisk = risk;
-            selectedArmy.sicknessRiskDetails = details;
-            
-            return newGs;
-        }
-    }
-    return newGs; // Return original state if no action was taken
+    const armyUnits = army.unitIds.map(id => newGs.units.get(id)!);
+    const { risk, details } = getSicknessRisk(army, armyUnits, destinationHex);
+    army.sicknessRisk = risk;
+    army.sicknessRiskDetails = details;
+    
+    return newGs;
 }
+
+export function processClaimTile(gs: GameState, payload: { cityId: string; tileKey: string; }): GameState {
+    const newGs = deepCloneGameState(gs);
+    const { cityId, tileKey } = payload;
+    const city = newGs.cities.get(cityId)!;
+    
+    if (city.pendingInfluenceExpansions > 0) {
+        city.controlledTiles.push(tileKey);
+        city.pendingInfluenceExpansions -= 1;
+    }
+    return newGs;
+}
+
 
 export function processFinalizeCampSetup(gs: GameState, payload: { armyId: string; selectedTileKeys: string[] }): GameState {
     const newGs = deepCloneGameState(gs);
@@ -448,7 +416,7 @@ export function processDeployArmy(gs: GameState, payload: { deploymentInfo: Army
     } else {
         const sourceArmy = newGs.armies.get(sourceId)!;
         sourceArmy.unitIds = sourceArmy.unitIds.filter(id => !deployedSet.has(id));
-        if (sourceArmy.unitIds.length === 0) {
+        if (sourceArmy.unitIds.length === 0 && !sourceArmy.isCamped) {
             const sourceHex = newGs.hexes.get(axialToString(sourceArmy.position))!;
             sourceHex.armyId = undefined;
             newGs.armies.delete(sourceId);
@@ -466,7 +434,7 @@ export function processDeployArmy(gs: GameState, payload: { deploymentInfo: Army
         unitIds: unitIdsToDeploy, 
         movementPoints: 0, 
         maxMovementPoints: slowestUnitSpeed,
-        name: "Army",
+        name: generateArmyName(),
         foundingTurn: newGs.turn,
         localResources: {},
         storageCapacity: storageCap,
@@ -500,7 +468,7 @@ export function processConfirmTransfer(gs: GameState, payload: { transferInfo: T
 
     // 2. Update source army
     sourceArmy.movementPoints = 0;
-    if (sourceArmy.unitIds.length === 0) {
+    if (sourceArmy.unitIds.length === 0 && !sourceArmy.isCamped) {
         const sourceHex = newGs.hexes.get(axialToString(sourceArmy.position))!;
         sourceHex.armyId = undefined;
         sourceHex.armyPresenceTurns = 0;
@@ -533,7 +501,7 @@ export function processProduceUnit(gs: GameState, payload: { unitType: UnitType,
     const unitDef = UNIT_DEFINITIONS[unitType];
     const cost = unitDef.cost;
 
-    const isAdvancedMale = unitDef.gender === Gender.Male && [UnitType.Infantry, UnitType.Shaman].includes(unitType);
+    const isAdvancedMale = unitDef.gender === Gender.Male && [UnitType.Infantry, UnitType.Shaman, UnitType.StoneWarrior].includes(unitType);
     let sacrificeUnitId: string | undefined = undefined;
 
     if (isAdvancedMale) {
@@ -592,7 +560,7 @@ export function processProduceInCamp(gs: GameState, payload: { armyId: string, i
         productionCost = def.productionCost;
     }
 
-    const isAdvancedMale = type === 'unit' && (def as UnitDefinition).gender === Gender.Male && [UnitType.Infantry, UnitType.Shaman].includes(itemType as UnitType);
+    const isAdvancedMale = type === 'unit' && (def as UnitDefinition).gender === Gender.Male && [UnitType.Infantry, UnitType.Shaman, UnitType.StoneWarrior].includes(itemType as UnitType);
     let sacrificeUnitId: string | undefined = undefined;
 
     if (isAdvancedMale) {
@@ -646,11 +614,11 @@ export function processCancelProduction(gs: GameState, payload: { containerId: s
     container.localResources.hides = (container.localResources.hides ?? 0) + (cost.hides ?? 0);
     container.localResources.obsidian = (container.localResources.obsidian ?? 0) + (cost.obsidian ?? 0);
 
-    const isAdvancedMale = item.type === 'unit' && (def as UnitDefinition).gender === Gender.Male && [UnitType.Infantry, UnitType.Shaman].includes(item.itemType as UnitType);
+    const isAdvancedMale = item.type === 'unit' && (def as UnitDefinition).gender === Gender.Male && [UnitType.Infantry, UnitType.Shaman, UnitType.StoneWarrior].includes(item.itemType as UnitType);
     if (isAdvancedMale) {
         const tribesmanDef = UNIT_DEFINITIONS[UnitType.Tribesman];
         const newUnitId = generateId();
-        const newUnit: Unit = { id: newUnitId, type: UnitType.Tribesman, ownerId: player.id, hp: tribesmanDef.maxHp, foodStored: 0, gender: Gender.Male };
+        const newUnit: Unit = { id: newUnitId, type: UnitType.Tribesman, ownerId: player.id, hp: tribesmanDef.maxHp, foodStored: 0, gender: Gender.Male, attackBonus: 0, defenseBonus: 0 };
         newGs.units.set(newUnitId, newUnit);
         if (containerType === 'city') {
             (container as City).garrison.push(newUnitId);
@@ -781,8 +749,11 @@ export function processFoodAndStarvation(gs: GameState): { newState: GameState; 
         const totalFoodStored = unitsInArmy.reduce((sum, u) => sum + u.foodStored, 0) + (army.food ?? 0);
         
         let totalGatherRate = unitsInArmy.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].foodGatherRate, 0);
-        if (army.isCamped && army.buildings?.includes(CampBuildingType.ForagingPost)) {
-            totalGatherRate += CAMP_BUILDING_DEFINITIONS[CampBuildingType.ForagingPost].foodGatherBonus!;
+        if (army.isCamped && army.buildings) {
+            for (const buildingType of army.buildings) {
+                const buildingDef = CAMP_BUILDING_DEFINITIONS[buildingType];
+                totalGatherRate += buildingDef.foodGatherBonus ?? 0;
+            }
         }
 
         let foodToGather = 0;
@@ -808,8 +779,11 @@ export function processFoodAndStarvation(gs: GameState): { newState: GameState; 
         let foodPool = unitsInArmy.reduce((sum, u) => sum + u.foodStored, 0) + (army.food ?? 0);
         
         let totalGatherRate = unitsInArmy.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].foodGatherRate, 0);
-        if (army.isCamped && army.buildings?.includes(CampBuildingType.ForagingPost)) {
-            totalGatherRate += CAMP_BUILDING_DEFINITIONS[CampBuildingType.ForagingPost].foodGatherBonus!;
+        if (army.isCamped && army.buildings) {
+            for (const buildingType of army.buildings) {
+                const buildingDef = CAMP_BUILDING_DEFINITIONS[buildingType];
+                totalGatherRate += buildingDef.foodGatherBonus ?? 0;
+            }
         }
         const totalConsumption = unitsInArmy.reduce((sum, u) => sum + UNIT_DEFINITIONS[u.type].foodConsumption, 0);
 
@@ -924,8 +898,15 @@ export function processProductionAndGathering(gs: GameState): GameState {
         const resourceFocus = container.resourceFocus;
 
         // Production
+        let productionPoints = totalWorkPoints * (productionFocus / 100);
+        if ('isCamped' in container && container.isCamped && container.buildings) {
+            for (const buildingType of container.buildings) {
+                const buildingDef = CAMP_BUILDING_DEFINITIONS[buildingType];
+                productionPoints += buildingDef.productionBonus ?? 0;
+            }
+        }
+
         if (container.buildQueue && container.buildQueue.length > 0) {
-            const productionPoints = totalWorkPoints * (productionFocus / 100);
             const item = container.buildQueue[0];
             item.progress += productionPoints;
 
@@ -934,7 +915,7 @@ export function processProductionAndGathering(gs: GameState): GameState {
                 if (item.type === 'unit') {
                     const unitDef = UNIT_DEFINITIONS[item.itemType as UnitType];
                     const newUnitId = generateId();
-                    newGs.units.set(newUnitId, { id: newUnitId, type: item.itemType as UnitType, ownerId: container.ownerId, hp: unitDef.maxHp, foodStored: 0, gender: unitDef.gender ?? Gender.None });
+                    newGs.units.set(newUnitId, { id: newUnitId, type: item.itemType as UnitType, ownerId: container.ownerId, hp: unitDef.maxHp, foodStored: 0, gender: unitDef.gender ?? Gender.None, attackBonus: 0, defenseBonus: 0 });
                     if ('garrison' in container) { 
                         container.garrison.push(newUnitId);
                     } else { 
@@ -962,7 +943,14 @@ export function processProductionAndGathering(gs: GameState): GameState {
         }
 
         // Resource Gathering
-        const gatheringPoints = totalWorkPoints * ((100 - productionFocus) / 100);
+        let gatheringPoints = totalWorkPoints * ((100 - productionFocus) / 100);
+        if ('isCamped' in container && container.isCamped && container.buildings) {
+            for (const buildingType of container.buildings) {
+                const buildingDef = CAMP_BUILDING_DEFINITIONS[buildingType];
+                gatheringPoints += buildingDef.gatherBonus ?? 0;
+            }
+        }
+
         if (gatheringPoints > 0 && resourceFocus) {
             const focusedResources = Object.entries(resourceFocus).filter(([_, v]) => v).map(([k, _]) => k as keyof typeof resourceFocus);
             if (focusedResources.length > 0) {
@@ -1034,6 +1022,8 @@ export function processPopulation(gs: GameState): GameState {
             unit.type = unit.gender === Gender.Male ? UnitType.Tribesman : UnitType.Tribeswoman;
             const newDef = UNIT_DEFINITIONS[unit.type];
             unit.hp = newDef.maxHp;
+            unit.attackBonus = 0;
+            unit.defenseBonus = 0;
             delete unit.age;
         }
     }
@@ -1054,7 +1044,9 @@ export function processPopulation(gs: GameState): GameState {
                         hp: childDef.maxHp, 
                         foodStored: 0, 
                         age: 0,
-                        gender: Math.random() < 0.5 ? Gender.Male : Gender.Female
+                        gender: Math.random() < 0.5 ? Gender.Male : Gender.Female,
+                        attackBonus: 0,
+                        defenseBonus: 0,
                     };
                     unitsBornThisTurn.push({ container, unit: newChild });
                 }
@@ -1116,6 +1108,7 @@ export function processSickness(gs: GameState): { newState: GameState, sickUnitI
             const sickUnit = units[Math.floor(Math.random() * units.length)];
             
             sickUnit.hp -= DISEASE_DAMAGE;
+            sickUnit.isSick = true;
             sickUnitIds.add(sickUnit.id);
             hex.wasSick = true;
         }
@@ -1155,6 +1148,7 @@ export function processEconomyAndRecovery(gs: GameState, starvedUnitIds: Set<str
                 }
             }
         }
+        // FIX: Add missing return statement.
         return income;
     };
     currentPlayer.gold += calculateIncome(currentPlayerId, newGs);
@@ -1213,6 +1207,9 @@ export function processEconomyAndRecovery(gs: GameState, starvedUnitIds: Set<str
             unitsInArmy.forEach(u => {
                 if (!starvedUnitIds.has(u.id) && !sickUnitIds.has(u.id) && u.hp < UNIT_DEFINITIONS[u.type].maxHp) {
                     u.hp = Math.min(UNIT_DEFINITIONS[u.type].maxHp, u.hp + totalHealAmount);
+                    if (u.hp === UNIT_DEFINITIONS[u.type].maxHp) {
+                        delete u.isSick;
+                    }
                 }
             });
         }
@@ -1220,79 +1217,77 @@ export function processEconomyAndRecovery(gs: GameState, starvedUnitIds: Set<str
 
     for (const city of Array.from(newGs.cities.values()).filter(c => c.ownerId === currentPlayerId)) {
         const units = city.garrison.map(id => newGs.units.get(id)!);
+        // FIX: Fix typo `UNIT` to `UNIT_DEFINITIONS` and complete healing logic.
         const bonus = units.reduce((sum, u) => sum + (UNIT_DEFINITIONS[u.type].healingBonus ?? 0), 0);
-        const healAmount = 1 + bonus;
+        const totalHealAmount = 1 + bonus; // Base heal + shaman bonus
         units.forEach(u => {
             if (!starvedUnitIds.has(u.id) && !sickUnitIds.has(u.id) && u.hp < UNIT_DEFINITIONS[u.type].maxHp) {
-                u.hp = Math.min(UNIT_DEFINITIONS[u.type].maxHp, u.hp + healAmount);
-            }
-        });
-    }
-
-    return newGs;
-}
-
-export function processUnitCleanup(gs: GameState): GameState {
-    const newGs = deepCloneGameState(gs);
-    const currentPlayerId = newGs.currentPlayerId;
-
-    const deadUnitIds = Array.from(newGs.units.values())
-        .filter(u => u.ownerId === currentPlayerId && u.hp <= 0)
-        .map(u => u.id);
-
-    if (deadUnitIds.length > 0) {
-        const deadSet = new Set(deadUnitIds);
-        newGs.armies.forEach((army, armyId) => {
-            if (army.ownerId === currentPlayerId) {
-                army.unitIds = army.unitIds.filter(id => !deadSet.has(id));
-                if (army.unitIds.length === 0) {
-                    const armyHex = newGs.hexes.get(axialToString(army.position));
-                    if (armyHex) {
-                        delete armyHex.armyId;
-                        armyHex.armyPresenceTurns = 0;
-                    }
-                    newGs.armies.delete(armyId);
+                u.hp = Math.min(UNIT_DEFINITIONS[u.type].maxHp, u.hp + totalHealAmount);
+                if (u.hp === UNIT_DEFINITIONS[u.type].maxHp) {
+                    delete u.isSick;
                 }
             }
         });
-        newGs.cities.forEach(city => {
-            if (city.ownerId === currentPlayerId) {
-                city.garrison = city.garrison.filter(id => !deadSet.has(id));
-            }
-        });
-        deadSet.forEach(id => newGs.units.delete(id));
     }
 
     return newGs;
 }
 
+// FIX: Add missing function `processUnitCleanup`.
+export function processUnitCleanup(gs: GameState): GameState {
+    const newGs = deepCloneGameState(gs);
+    const unitsToRemove = new Set<string>();
+
+    for (const unit of newGs.units.values()) {
+        if (unit.hp <= 0) {
+            unitsToRemove.add(unit.id);
+        }
+    }
+
+    if (unitsToRemove.size > 0) {
+        for (const city of newGs.cities.values()) {
+            city.garrison = city.garrison.filter(id => !unitsToRemove.has(id));
+        }
+        for (const army of newGs.armies.values()) {
+            army.unitIds = army.unitIds.filter(id => !unitsToRemove.has(id));
+            if (army.unitIds.length === 0 && !army.isCamped) {
+                const armyHex = newGs.hexes.get(axialToString(army.position));
+                if (armyHex) {
+                    armyHex.armyId = undefined;
+                }
+                newGs.armies.delete(army.id);
+            }
+        }
+        for (const unitId of unitsToRemove) {
+            newGs.units.delete(unitId);
+        }
+    }
+
+    return newGs;
+}
+
+// FIX: Add missing function `processCulturalShifts`.
 export function processCulturalShifts(gs: GameState): GameState {
     const newGs = deepCloneGameState(gs);
     const player = newGs.players.find(p => p.id === newGs.currentPlayerId)!;
 
-    const unitsInArmies = Array.from(newGs.armies.values()).filter(a => a.ownerId === player.id).reduce((sum, a) => sum + a.unitIds.length, 0);
-    const unitsInCities = Array.from(newGs.cities.values()).filter(c => c.ownerId === player.id).reduce((sum, c) => sum + c.garrison.length, 0);
-    if (unitsInArmies + unitsInCities > 0) {
-        player.culture.nomadism = Math.max(-100, Math.min(100, player.culture.nomadism + (unitsInArmies / (unitsInArmies + unitsInCities) - 0.5) * 4));
+    // Shift towards aggressive if attacks were made
+    if (player.actionsThisTurn.attacks > 0) {
+        player.culture.militarism = Math.min(100, player.culture.militarism + player.actionsThisTurn.attacks * 2);
+    } else {
+        // Passive shift towards peaceful
+        player.culture.militarism = Math.max(-100, player.culture.militarism - 0.5);
     }
     
-    const allPlayerUnits = Array.from(newGs.units.values()).filter(u => u.ownerId === player.id);
-    const maleUnits = allPlayerUnits.filter(u => u.gender === Gender.Male).length;
-    const femaleUnits = allPlayerUnits.filter(u => u.gender === Gender.Female).length;
-    if (maleUnits + femaleUnits > 0) {
-        player.culture.genderRoles = Math.max(-100, Math.min(100, player.culture.genderRoles + (femaleUnits / (maleUnits + femaleUnits) - 0.5) * 4));
-    }
-
-    if (player.actionsThisTurn.attacks === 0) {
-        player.culture.militarism = Math.max(-100, player.culture.militarism - 1);
-    }
-    player.actionsThisTurn = { attacks: 0 };
-
+    // Check for new cultural aspects unlocked
     for (const aspect of Object.values(CULTURAL_ASPECTS)) {
         if (!player.culture.unlockedAspects.includes(aspect.id)) {
-            if (aspect.unlockConditions.every(cond => cond.threshold > 0 ? player.culture[cond.axis] >= cond.threshold : player.culture[cond.axis] <= cond.threshold)) {
+            const conditionsMet = aspect.unlockConditions.every(cond => {
+                const axisValue = player.culture[cond.axis];
+                return cond.threshold > 0 ? axisValue >= cond.threshold : axisValue <= cond.threshold;
+            });
+            if (conditionsMet) {
                 player.culture.unlockedAspects.push(aspect.id);
-                // playSound('upgrade');
             }
         }
     }
@@ -1300,28 +1295,51 @@ export function processCulturalShifts(gs: GameState): GameState {
     return newGs;
 }
 
+// FIX: Add missing function `finalizeTurn`.
 export function finalizeTurn(gs: GameState): GameState {
     const newGs = deepCloneGameState(gs);
-    const nextPlayerId = newGs.currentPlayerId === 1 ? 2 : 1;
+    
+    // Reset actions for the player who just finished
+    const finishedPlayer = newGs.players.find(p => p.id === newGs.currentPlayerId)!;
+    finishedPlayer.actionsThisTurn = { attacks: 0 };
 
-    // Reset movement points for the next player
-    newGs.armies.forEach(army => {
-        if (army.ownerId === nextPlayerId && !army.isCamped) {
-           army.movementPoints = army.maxMovementPoints;
+    // Clear any pending battle info before changing player
+    delete newGs.pendingBattle;
+
+    // Change current player
+    newGs.currentPlayerId = (newGs.currentPlayerId % newGs.players.length) + 1;
+
+    // Increment turn number if it's player 1's turn again
+    if (newGs.currentPlayerId === 1) {
+        newGs.turn += 1;
+        // Also do regrowth for all tiles
+        for (const hex of newGs.hexes.values()) {
+            const terrainDef = TERRAIN_DEFINITIONS[hex.terrain];
+            hex.currentFood = Math.min(terrainDef.maxFood, hex.currentFood + terrainDef.foodRegrowth);
+            hex.currentWood = Math.min(terrainDef.maxWood, hex.currentWood + terrainDef.woodRegrowth);
+            // Stone/Obsidian don't regrow
+            hex.currentHides = Math.min(terrainDef.maxHides, hex.currentHides + terrainDef.hidesRegrowth);
         }
-   });
-   
-    // Advance turn and handle global regrowth if it's the end of a full round
-   if (nextPlayerId === 1) {
-       newGs.turn += 1;
-       for (const hex of newGs.hexes.values()) {
-           const terrainDef = TERRAIN_DEFINITIONS[hex.terrain];
-           hex.currentFood = Math.min(terrainDef.maxFood, hex.currentFood + terrainDef.foodRegrowth);
-           hex.currentWood = Math.min(terrainDef.maxWood, hex.currentWood + terrainDef.woodRegrowth);
-           hex.currentHides = Math.min(terrainDef.maxHides, hex.currentHides + terrainDef.hidesRegrowth);
-       }
-   }
-   
-   newGs.currentPlayerId = nextPlayerId;
-   return newGs;
+    }
+    
+    const nextPlayer = newGs.players.find(p => p.id === newGs.currentPlayerId)!;
+    
+    // Replenish movement points for the new current player's armies
+    for (const army of newGs.armies.values()) {
+        if (army.ownerId === nextPlayer.id) {
+            army.movementPoints = army.maxMovementPoints;
+        }
+    }
+
+    // Reset stagnation timers for enemy armies
+    for (const hex of newGs.hexes.values()) {
+        if (hex.armyId) {
+            const army = newGs.armies.get(hex.armyId);
+            if (army && army.ownerId !== nextPlayer.id) {
+                hex.armyPresenceTurns = 0;
+            }
+        }
+    }
+
+    return newGs;
 }

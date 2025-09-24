@@ -1,7 +1,7 @@
 import React from 'react';
 import { HEX_SIZE, TERRAIN_DEFINITIONS, UNIT_DEFINITIONS, CITY_HP } from '../constants';
 import { Hex, Unit, City, Player, Army } from '../types';
-import { InfantryIcon, TankIcon, CityIcon, FoodIcon, PlusIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, CampIcon, SicknessIcon } from './Icons';
+import { InfantryIcon, TankIcon, CityIcon, FoodIcon, PlusIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, CampIcon, SicknessIcon, StoneWarriorIcon } from './Icons';
 import { UnitType } from '../types';
 
 interface HexagonProps {
@@ -91,6 +91,8 @@ const Hexagon: React.FC<HexagonProps> = ({ hex, army, unitsInArmy, city, player,
         return <ChildIcon className={iconClass} />;
       case UnitType.Shaman:
         return <ShamanIcon className={iconClass} />;
+      case UnitType.StoneWarrior:
+        return <StoneWarriorIcon className={iconClass} />;
       default:
         return null;
     }

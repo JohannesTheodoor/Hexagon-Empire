@@ -18,6 +18,12 @@ export const TribesmanIcon: React.FC<{ className?: string }> = ({ className }) =
     </svg>
 );
 
+export const StoneWarriorIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-2 3.82V20h2v-8.35c.78-.37 1.3-1.15 1.3-2.07 0-1.27-1.03-2.3-2.3-2.3s-2.3 1.03-2.3 2.3c0 .92.52 1.7 1.3 2.07zM19 12l-3-3 1.06-1.06L20.5 11.5 19 13zM5 12l3-3-1.06-1.06L3.5 11.5 5 13z" />
+    </svg>
+);
+
 export const TribeswomanIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
         <path d="M12 6c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2m0 10c2.7 0 5.8 1.29 6 2H6c.23-.72 3.31-2 6-2m0-12C9.79 4 8 5.79 8 8s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 10c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
@@ -229,6 +235,12 @@ export const FireMasteryIcon: React.FC<{ className?: string }> = ({ className })
     </svg>
 );
 
+export const ObsidianKnappingIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M14.41 7.41L13 6l-1.41 1.41L13 8.83l6 6-1.41 1.41-6-6-1.41 1.41L13 14l-1.41-1.41-1.18 1.18-4-4L2 14.17V18h3.83l4.59-4.59L12 12l1.41-1.41L14.41 7.41zM20.41 2.41L19 1l-2.09 2.09c-1.95-1.95-5.12-1.95-7.07 0L8.5 4.5l1.41 1.41L11.33 7.33l1.41 1.41 1.41-1.41 1.41-1.41 1.41 1.41 1.41-1.41c1.95-1.95 1.95-5.12 0-7.07z"/>
+    </svg>
+);
+
 export const SimpleStorageIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
         <path d="M20 6h-3V4c0-1.1-.9-2-2-2H9c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2zM9 4h6v2H9V4zm11 15H4V8h16v11z"/>
@@ -268,6 +280,12 @@ export const HerbalLoreIcon: React.FC<{ className?: string }> = ({ className }) 
 export const HealersTentIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
         <path d="M12 3L2 21h4l6-10 6 10h4L12 3zm-1 11h2v-2h2v-2h-2V8h-2v2H9v2h2v2z"/>
+    </svg>
+);
+
+export const ToolmakersShelterIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M12 3L2 21h4l6-10 6 10h4L12 3zm-1.29 11.58l-1.42 1.42L12 18.41l2.71-2.71-1.42-1.42L12 15.59l-1.29-1.29zM15 9h-2v2h2V9zm-4 0H9v2h2V9z"/>
     </svg>
 );
 

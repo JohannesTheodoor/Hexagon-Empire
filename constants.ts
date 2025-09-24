@@ -1,3 +1,4 @@
+
 import { TerrainType, TerrainDefinition, UnitType, UnitDefinition, UnitSize, BuildingType, BuildingDefinition, Gender, CampBuildingType, CampBuildingDefinition } from './types';
 
 export const MAP_SIZES = {
@@ -99,6 +100,12 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
         size: UnitSize.Small, foodGatherRate: 0, foodConsumption: 2,
         productionYield: 0, carryCapacity: 1, foodCarryCapacity: 2, researchYield: 1, healingBonus: 1,
         gender: Gender.Male, requiredTech: 'herbal_lore',
+    },
+    [UnitType.StoneWarrior]: {
+        movement: 1, cost: { wood: 1, hides: 1, obsidian: 2 }, productionCost: 55, attack: 5, defense: 3, maxHp: 8,
+        size: UnitSize.Small, foodGatherRate: 1, foodConsumption: 2,
+        productionYield: 0, carryCapacity: 2, foodCarryCapacity: 1, researchYield: 0, healingBonus: 0,
+        gender: Gender.Male, requiredTech: 'obsidian_knapping',
     }
 };
 
@@ -113,9 +120,11 @@ export const CAMP_BUILDING_DEFINITIONS: Record<CampBuildingType, CampBuildingDef
     [CampBuildingType.ScoutTent]: { name: 'Scout Tent', description: '+1 Vision range for the camp.', cost: { wood: 10, hides: 30 }, productionCost: 400, visionBonus: 1 },
     [CampBuildingType.ForagingPost]: { name: 'Foraging Post', description: '+5 Food gathering per turn from this tile.', cost: { wood: 60 }, productionCost: 600, foodGatherBonus: 5 },
     [CampBuildingType.StoragePit]: { name: 'Storage Pit', description: '+50 resource storage capacity.', cost: { wood: 10, stone: 5, hides: 2 }, productionCost: 15, storageBonus: 50, requiredTech: 'simple_storage' },
+    // FIX: Correct property name from foodStorageBonus to match updated CampBuildingDefinition type
     [CampBuildingType.DryingRack]: { name: 'Drying Rack', description: 'Increases camp food storage by 10.', cost: { wood: 8 }, productionCost: 18, foodStorageBonus: 10, requiredTech: 'simple_storage' },
     [CampBuildingType.HealersTent]: { name: "Healer's Tent", description: 'Provides advanced care, increasing unit healing by +1 HP/turn and reducing camp disease risk by 10%.', cost: { wood: 6, hides: 6, obsidian: 2 }, productionCost: 100, healingBonus: 1, diseaseRiskReduction: 0.1, requiredTech: 'herbal_lore' },
     [CampBuildingType.Tent]: { name: 'Tent', description: 'Provides housing for camp members, reducing overcrowding. Upgradeable.', cost: { wood: 5, hides: 5, stone: 1 }, productionCost: 25, housingCapacity: 10 },
+    [CampBuildingType.ToolmakersShelter]: { name: "Toolmaker's Shelter", description: 'Craft better tools. +5 camp production, +5 camp gathering, and +1 Attack for Stone Warriors in camp.', cost: { wood: 15, hides: 10, obsidian: 4 }, productionCost: 100, requiredTech: 'obsidian_knapping', productionBonus: 5, gatherBonus: 5, foodGatherBonus: 5, attackBonusUnits: [{ unitType: UnitType.StoneWarrior, bonus: 1 }] },
 };
 
 export const axialDirections: {q: number, r: number}[] = [

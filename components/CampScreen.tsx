@@ -1,9 +1,19 @@
 
 
+
+
+
+
+
+
+
+
+
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { GameState, UnitType, Unit, TerrainType, CampBuildingType, BuildQueueItem, Gender, Army, ResourceCost } from '../types';
 import { UNIT_DEFINITIONS, TERRAIN_DEFINITIONS, CAMP_BUILDING_DEFINITIONS, GATHERING_YIELD_PER_POINT } from '../constants';
-import { CloseIcon, ResearchIcon, PlusIcon, InfantryIcon, TankIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, PalisadeIcon, ScoutTentIcon, ForagingPostIcon, WoodIcon, StoneIcon, HidesIcon, ObsidianIcon, StoragePitIcon, ArrowDownIcon, FirePitIcon, FoodIcon, DryingRackIcon, SicknessIcon, ArrowUpIcon, HealersTentIcon, TentIcon, UsersIcon } from './Icons';
+import { CloseIcon, ResearchIcon, PlusIcon, InfantryIcon, TankIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, PalisadeIcon, ScoutTentIcon, ForagingPostIcon, WoodIcon, StoneIcon, HidesIcon, ObsidianIcon, StoragePitIcon, ArrowDownIcon, FirePitIcon, FoodIcon, DryingRackIcon, SicknessIcon, ArrowUpIcon, HealersTentIcon, TentIcon, UsersIcon, ToolmakersShelterIcon } from './Icons';
 import StackedUnitCard from './StackedUnitCard';
 import { axialToString } from '../utils/hexUtils';
 import { useGameStore } from '../store/gameStore';
@@ -74,6 +84,7 @@ const renderQueueItemIcon = (item: BuildQueueItem) => {
             case CampBuildingType.DryingRack: return <DryingRackIcon className={iconClass} />;
             case CampBuildingType.HealersTent: return <HealersTentIcon className={iconClass} />;
             case CampBuildingType.Tent: return <TentIcon className={iconClass} />;
+            case CampBuildingType.ToolmakersShelter: return <ToolmakersShelterIcon className={iconClass} />;
             default: return null;
         }
     }
@@ -90,6 +101,7 @@ const renderBuildingIcon = (buildingType: CampBuildingType) => {
         case CampBuildingType.DryingRack: return <DryingRackIcon className={iconClass} />;
         case CampBuildingType.HealersTent: return <HealersTentIcon className={iconClass} />;
         case CampBuildingType.Tent: return <TentIcon className={iconClass} />;
+        case CampBuildingType.ToolmakersShelter: return <ToolmakersShelterIcon className={iconClass} />;
         default: return null;
     }
 }
@@ -179,36 +191,28 @@ const CampScreen: React.FC<CampScreenProps> = ({ armyId, onClose }) => {
   }, [army.controlledTiles, gameState.hexes]);
 
   // Food calculations
-  // FIX: Explicitly type reduce callback parameters to prevent 'unknown' type inference.
   const totalUnitFoodStored = garrisonedUnits.reduce((sum: number, u: Unit) => sum + u.foodStored, 0);
   const totalFoodStored = (army.food ?? 0) + totalUnitFoodStored;
-  // FIX: Explicitly type reduce callback parameters to prevent 'unknown' type inference.
   const totalUnitFoodCapacity = garrisonedUnits.reduce((sum: number, u: Unit) => sum + UNIT_DEFINITIONS[u.type].foodCarryCapacity, 0);
   const totalCampFoodCapacity = army.foodStorageCapacity ?? 0;
   const totalOverallFoodCapacity = totalUnitFoodCapacity + totalCampFoodCapacity;
-  // FIX: Explicitly type reduce callback parameters to prevent 'unknown' type inference.
   let totalFoodGatherRate = garrisonedUnits.reduce((sum: number, u: Unit) => sum + UNIT_DEFINITIONS[u.type].foodGatherRate, 0);
   if (army.buildings?.includes(CampBuildingType.ForagingPost)) {
       totalFoodGatherRate += CAMP_BUILDING_DEFINITIONS[CampBuildingType.ForagingPost].foodGatherBonus ?? 0;
   }
-  // FIX: Explicitly type reduce callback parameters to prevent 'unknown' type inference.
   const totalConsumption = garrisonedUnits.reduce((sum: number, u: Unit) => sum + UNIT_DEFINITIONS[u.type].foodConsumption, 0);
   const foodToGather = Math.min(availableFoodOnTerritory, totalFoodGatherRate);
   const netFoodChange = foodToGather - totalConsumption;
   const netColor = netFoodChange >= 0 ? 'text-green-400' : 'text-red-400';
   
-  // FIX: Explicitly type reduce callback parameters to prevent 'unknown' type inference.
   const totalWorkPoints = garrisonedUnits.reduce((sum: number, u: Unit) => sum + UNIT_DEFINITIONS[u.type].productionYield, 0);
-  // FIX: Explicitly cast productionFocus and totalWorkPoints to Number to prevent type errors from state cloning.
   const productionPoints = Number(totalWorkPoints) * (Number(productionFocus) / 100);
   const gatheringPoints = Number(totalWorkPoints) * ((100 - Number(productionFocus)) / 100);
   const focusedResourcesCount = Object.values(resourceFocus).filter(v => v).length;
   const pointsPerResource = focusedResourcesCount > 0 ? gatheringPoints / focusedResourcesCount : 0;
   const projectedYield = Math.round(pointsPerResource * GATHERING_YIELD_PER_POINT);
-  // FIX: Explicitly type reduce callback parameters to prevent 'unknown' type error.
   const totalStoredResources = Object.values(army.localResources).reduce((sum: number, val: unknown) => sum + (Number(val) || 0), 0);
 
-  // FIX: Use Number() conversion to prevent errors from 'unknown' type inference on army properties.
   const progressPercentage = (Number(army.xp ?? 0) / Number(army.xpToNextLevel ?? 1)) * 100;
   
   const risk = army.sicknessRisk ?? 0;
@@ -358,7 +362,9 @@ const CampScreen: React.FC<CampScreenProps> = ({ armyId, onClose }) => {
                     const hasRequiredTech = !def.requiredTech || player.unlockedTechs.includes(def.requiredTech);
                     const isAlreadyBuilt = army.buildings?.includes(buildingType);
                     const isQueued = army.buildQueue?.some(item => item.itemType === buildingType);
-                    const hasEmptySlot = (army.buildings?.length ?? 0) + (army.tentLevel ? 1 : 0) < army.level;
+                    // FIX: The left-hand side of an arithmetic operation may be an invalid type due to state cloning.
+                    // Explicitly cast army.level to a number and use Array.isArray to safely get length.
+                    const hasEmptySlot = (Array.isArray(army.buildings) ? army.buildings.length : 0) + (army.tentLevel ? 1 : 0) < Number(army.level);
 
                     if (!hasRequiredTech || isAlreadyBuilt || isQueued) return null;
                     
@@ -532,7 +538,6 @@ const CampScreen: React.FC<CampScreenProps> = ({ armyId, onClose }) => {
              <div>
                 <h3 className="text-lg font-semibold text-gray-300 mb-1 mt-4">Local Resource Storage</h3>
                 <div className="w-full h-2.5 bg-gray-700 rounded-full overflow-hidden border border-black my-1">
-                    {/* FIX: The type of `army.storageCapacity` can be inferred as `unknown` due to state cloning. Using Number() ensures it is treated as a number for the calculation. */}
                     <div className="bg-yellow-500 h-full rounded-full" style={{ width: `${(totalStoredResources / Number(army.storageCapacity)) * 100}%`}}></div>
                 </div>
                 <p className="text-right text-xs">{totalStoredResources} / {army.storageCapacity} (Goods)</p>
@@ -582,15 +587,20 @@ const CampScreen: React.FC<CampScreenProps> = ({ armyId, onClose }) => {
                         </div>
                     )
                 })}
-                {/* FIX: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type. */}
-                {/* FIX: Explicitly cast army.tentLevel and army.level to Number to prevent type errors from state cloning. */}
-                {Array.from({ length: Number(army.level) - (((army.buildings as CampBuildingType[] | undefined)?.length ?? 0) + (Number(army.tentLevel) ? 1 : 0)) }).map((_, index) => {
-                    const isSlotQueued = army.buildQueue?.some(item => item.type === 'building');
-                     if (isCurrentPlayerCamp && !isSlotQueued && index === 0) {
-                         return <div key={`empty-${index}`} className="bg-gray-900/50 p-2 rounded-lg flex items-center justify-center h-24 text-gray-500 italic">Empty Slot</div>
-                    }
-                    return <div key={`locked-${index}`} className="bg-gray-900/80 rounded-lg h-24"></div>
-                })}
+                {/* FIX: The left-hand side of an arithmetic operation may be an invalid type due to state cloning.
+                    Explicitly casting army.level, army.buildings.length, and army.tentLevel to numbers ensures type safety for the subtraction. */}
+                {(() => {
+                    const emptySlots = Number(army.level) - ((Array.isArray(army.buildings) ? army.buildings.length : 0) + (army.tentLevel ? 1 : 0));
+                    if (emptySlots <= 0) return null;
+
+                    return Array.from({ length: emptySlots }).map((_, index) => {
+                        const isSlotQueued = army.buildQueue?.some(item => item.type === 'building');
+                         if (isCurrentPlayerCamp && !isSlotQueued && index === 0) {
+                             return <div key={`empty-${index}`} className="bg-gray-900/50 p-2 rounded-lg flex items-center justify-center h-24 text-gray-500 italic">Empty Slot</div>
+                        }
+                        return <div key={`locked-${index}`} className="bg-gray-900/80 rounded-lg h-24"></div>
+                    });
+                })()}
              </div>
              {isCurrentPlayerCamp && (
                 <div className="mt-4 pt-4 border-t-2 border-gray-700">

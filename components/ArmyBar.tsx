@@ -1,50 +1,47 @@
 import React from 'react';
 import { GameState, AxialCoords, Unit, UnitType, Player, City, Army } from '../types';
 import { axialToString } from '../utils/hexUtils';
-import { InfantryIcon, TankIcon, TribesmanIcon, TribeswomanIcon, PlusIcon, CampIcon, ChildIcon, ShamanIcon } from './Icons';
+import { InfantryIcon, TankIcon, TribesmanIcon, TribeswomanIcon, PlusIcon, CampIcon, ChildIcon, ShamanIcon, StoneWarriorIcon } from './Icons';
 import { UNIT_DEFINITIONS } from '../constants';
 import { useGameStore } from '../store/gameStore';
 
-const groupUnits = (units: Unit[]): { representative: Unit, units: Unit[], count: number }[] => {
-  if (!units.length) return [];
-  
-  const groups = new Map<string, { representative: Unit, units: Unit[], count: number }>();
-
-  for (const unit of units) {
-    const key = `${unit.type}-${unit.hp}`;
-    
-    if (groups.has(key)) {
-      const group = groups.get(key)!;
-      group.units.push(unit);
-      group.count++;
-    } else {
-      groups.set(key, { representative: unit, units: [unit], count: 1 });
+const groupUnitsByType = (units: Unit[]): Map<UnitType, Unit[]> => {
+    const groups = new Map<UnitType, Unit[]>();
+    for (const unit of units) {
+        if (!groups.has(unit.type)) {
+            groups.set(unit.type, []);
+        }
+        groups.get(unit.type)!.push(unit);
     }
-  }
-  
-  return Array.from(groups.values());
+    return groups;
 };
 
 const UnitIconCard: React.FC<{
-    unit: Unit;
-    count: number;
+    unitType: UnitType;
+    units: Unit[];
     player: Player | undefined;
     isSelected: boolean;
     onSelect: () => void;
-}> = ({ unit, count, player, isSelected, onSelect }) => {
-    const unitDef = UNIT_DEFINITIONS[unit.type];
-    const healthPercentage = (unit.hp / unitDef.maxHp) * 100;
+}> = ({ unitType, units, player, isSelected, onSelect }) => {
+    const count = units.length;
+    const unitDef = UNIT_DEFINITIONS[unitType];
+    
+    const totalHp = units.reduce((sum, u) => sum + u.hp, 0);
+    const totalMaxHp = count * unitDef.maxHp;
+    const healthPercentage = totalMaxHp > 0 ? (totalHp / totalMaxHp) * 100 : 0;
+    
     const barColor = healthPercentage > 50 ? 'bg-green-500' : healthPercentage > 25 ? 'bg-yellow-500' : 'bg-red-500';
 
     const renderIcon = () => {
         const iconClass = 'w-10 h-10 drop-shadow-lg';
-        switch(unit.type) {
+        switch(unitType) {
             case UnitType.Infantry: return <InfantryIcon className={iconClass} />;
             case UnitType.Tank: return <TankIcon className={iconClass} />;
             case UnitType.Tribesman: return <TribesmanIcon className={iconClass} />;
             case UnitType.Tribeswoman: return <TribeswomanIcon className={iconClass} />;
             case UnitType.Child: return <ChildIcon className={iconClass} />;
             case UnitType.Shaman: return <ShamanIcon className={iconClass} />;
+            case UnitType.StoneWarrior: return <StoneWarriorIcon className={iconClass} />;
             default: return null;
         }
     };
@@ -57,7 +54,7 @@ const UnitIconCard: React.FC<{
                 backgroundColor: isSelected ? `${player?.color}60` : `${player?.color}30`,
                 borderColor: player?.color ?? '#FFFFFF'
             }}
-            aria-label={`Select ${unit.type} (${count})`}
+            aria-label={`Select ${unitType} (${count})`}
         >
              <div className="absolute inset-0 border-2 rounded-lg pointer-events-none" style={{ borderColor: isSelected ? player?.color ?? '#FFFFFF' : 'transparent' }}></div>
             {renderIcon()}
@@ -116,12 +113,10 @@ const ArmyBar: React.FC<ArmyBarProps> = ({ selectedHex, selectedUnitId, selected
     const player = gameState.players.find(p => p.id === (army?.ownerId ?? cityOnHex?.ownerId));
     const isPlayersTurn = player?.id === gameState.currentPlayerId;
 
-    const groupedUnits = groupUnits(unitsToShow);
+    const groupedUnits = groupUnitsByType(unitsToShow);
 
-    const isStackSelected = (group: { units: Unit[] }) => {
-        if (!selectedUnitId) return false;
-        return group.units.some(u => u.id === selectedUnitId);
-    };
+    const selectedUnit = selectedUnitId ? gameState.units.get(selectedUnitId) : null;
+    const selectedUnitType = selectedUnit?.type ?? null;
 
     const showFormArmyButton = isPlayersTurn && cityOnHex && cityOnHex.garrison.length > 0;
     const showSplitArmyButton = isPlayersTurn && army && army.unitIds.length > 1;
@@ -165,14 +160,14 @@ const ArmyBar: React.FC<ArmyBarProps> = ({ selectedHex, selectedUnitId, selected
             </div>
 
             <div className="flex items-center gap-2 overflow-x-auto">
-                {groupedUnits.map(group => (
+                {Array.from(groupedUnits.entries()).map(([unitType, units]) => (
                     <UnitIconCard
-                        key={`${group.representative.type}-${group.representative.hp}`}
-                        unit={group.representative}
-                        count={group.count}
+                        key={unitType}
+                        unitType={unitType}
+                        units={units}
                         player={player}
-                        isSelected={isStackSelected(group)}
-                        onSelect={() => onSelectUnit(group.representative.id)}
+                        isSelected={selectedUnitType === unitType}
+                        onSelect={() => onSelectUnit(units[0].id)}
                     />
                 ))}
             </div>

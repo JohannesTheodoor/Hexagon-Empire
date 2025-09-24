@@ -1,6 +1,6 @@
 import React, { useRef, useLayoutEffect, useState, useMemo } from 'react';
 import { GameState, Technology } from '../types';
-import { CloseIcon, ResearchIcon, FoodIcon, MiningIcon, BuildingIcon, ForgingIcon, FishingIcon, SailingIcon, MountaineeringIcon, FireMasteryIcon, SimpleStorageIcon, HerbalLoreIcon } from './Icons';
+import { CloseIcon, ResearchIcon, FoodIcon, MiningIcon, BuildingIcon, ForgingIcon, FishingIcon, SailingIcon, MountaineeringIcon, FireMasteryIcon, SimpleStorageIcon, HerbalLoreIcon, ObsidianKnappingIcon } from './Icons';
 import { TECH_TREE } from '../techtree';
 import { useGameStore } from '../store/gameStore';
 import { playSound } from '../utils/soundManager';
@@ -14,6 +14,7 @@ const TechIcon: React.FC<{ techId: string; className?: string }> = ({ techId, cl
         case 'fire_mastery': return <FireMasteryIcon className={className} />;
         case 'simple_storage': return <SimpleStorageIcon className={className} />;
         case 'herbal_lore': return <HerbalLoreIcon className={className} />;
+        case 'obsidian_knapping': return <ObsidianKnappingIcon className={className} />;
         case 'agriculture': return <FoodIcon className={className} />;
         case 'mining': return <MiningIcon className={className} />;
         case 'construction': return <BuildingIcon className={className} />;
@@ -144,6 +145,7 @@ const ResearchScreen: React.FC<ResearchScreenProps> = ({ onClose }) => {
             }
         }
     }
+// FIX: The state update was using a stale `lines` variable instead of the newly computed `newLines`.
     setLines(newLines);
   }, [techTiers, player?.unlockedTechs]);
   

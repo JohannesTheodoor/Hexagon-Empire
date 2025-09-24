@@ -1,10 +1,20 @@
 
 
+
+
+
+
+
+
+
+
+
+
 import React, { useState, useMemo } from 'react';
 // FIX: Added BuildingType to imports to resolve multiple "Cannot find name" errors.
 import { GameState, City, UnitType, BuildQueueItem, Unit, TerrainType, Gender, ResourceCost, Army, BuildingType } from '../types';
 import { BASE_CITY_INCOME, INCOME_PER_INFLUENCE_LEVEL, BUILDING_DEFINITIONS, UNIT_DEFINITIONS, TERRAIN_DEFINITIONS, BASE_CITY_FOOD_STORAGE, GATHERING_YIELD_PER_POINT } from '../constants';
-import { CloseIcon, FoodIcon, InfantryIcon, TankIcon, MarketplaceIcon, GranaryIcon, PlusIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, WoodIcon, StoneIcon, HidesIcon, ObsidianIcon, ArrowDownIcon, SicknessIcon } from './Icons';
+import { CloseIcon, FoodIcon, InfantryIcon, TankIcon, MarketplaceIcon, GranaryIcon, PlusIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, WoodIcon, StoneIcon, HidesIcon, ObsidianIcon, ArrowDownIcon, SicknessIcon, StoneWarriorIcon } from './Icons';
 import { TECH_TREE } from '../techtree';
 import StackedUnitCard from './StackedUnitCard';
 import { axialToString } from '../utils/hexUtils';
@@ -26,6 +36,7 @@ const renderQueueItemIcon = (item: BuildQueueItem) => {
             case UnitType.Tribeswoman: return <TribeswomanIcon className={iconClass} />;
             case UnitType.Child: return <ChildIcon className={iconClass} />;
             case UnitType.Shaman: return <ShamanIcon className={iconClass} />;
+            case UnitType.StoneWarrior: return <StoneWarriorIcon className={iconClass} />;
             default: return null;
         }
     } else {
@@ -108,9 +119,7 @@ const CityScreen: React.FC<CityScreenProps> = ({ cityId, onClose }) => {
   }, new Map<UnitType, Unit[]>());
 
 
-  // FIX: Explicitly type reduce callback parameters to prevent 'unknown' type inference.
   const totalWorkPoints = garrisonedUnits.reduce((sum: number, u: Unit) => sum + UNIT_DEFINITIONS[u.type].productionYield, 0);
-  // FIX: Explicitly type reduce callback parameters to prevent 'unknown' type inference.
   const foodConsumption = garrisonedUnits.reduce((sum: number, u: Unit) => sum + UNIT_DEFINITIONS[u.type].foodConsumption, 0);
   
   const hasFishing = player.unlockedTechs.includes('fishing');
@@ -145,15 +154,13 @@ const CityScreen: React.FC<CityScreenProps> = ({ cityId, onClose }) => {
 
   const foodSurplus = yields.food - foodConsumption;
   
-  // FIX: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
-  // city.controlledTiles becomes `unknown` due to cloning, so its length is also `unknown`.
-  // Casting to string[] ensures length is a number before subtraction.
-  let goldFromCity = BASE_CITY_INCOME + ((city.controlledTiles as string[]).length - 1) * INCOME_PER_INFLUENCE_LEVEL;
-  for(const buildingType of city.buildings) {
+  // FIX: The left-hand side of an arithmetic operation may be an invalid type due to state cloning.
+  // Casting city.controlledTiles to string[] and using Number() on its length ensures type safety.
+  let goldFromCity = BASE_CITY_INCOME + (Number((city.controlledTiles as string[]).length) - 1) * INCOME_PER_INFLUENCE_LEVEL;
+  for(const buildingType of city.buildings as BuildingType[]) {
       goldFromCity += BUILDING_DEFINITIONS[buildingType].goldBonus ?? 0;
   }
   
-// FIX: Use Number() conversion to prevent errors from 'unknown' type inference on city properties.
   const nextMilestone = Number(city.nextPopulationMilestone);
   const prevPopMilestone = nextMilestone / 2;
   const popProgressToNextLevel = Number(city.population) - prevPopMilestone;
@@ -185,7 +192,7 @@ const CityScreen: React.FC<CityScreenProps> = ({ cityId, onClose }) => {
 
   const handleProduceUnit = (unitType: UnitType) => {
     const unitDef = UNIT_DEFINITIONS[unitType];
-    const isAdvancedMale = unitDef.gender === Gender.Male && [UnitType.Infantry, UnitType.Shaman].includes(unitType);
+    const isAdvancedMale = unitDef.gender === Gender.Male && [UnitType.Infantry, UnitType.Shaman, UnitType.StoneWarrior].includes(unitType);
     const hasSacrifice = !isAdvancedMale || garrisonedUnits.some(u => u.type === UnitType.Tribesman);
     const canAfford = player.gold >= (unitDef.cost.gold ?? 0) &&
                     (city.localResources.wood ?? 0) >= (unitDef.cost.wood ?? 0) &&
@@ -215,7 +222,7 @@ const CityScreen: React.FC<CityScreenProps> = ({ cityId, onClose }) => {
                     const hasRequiredTech = !def.requiredTech || player.unlockedTechs.includes(def.requiredTech);
                     if (!hasRequiredTech) return null;
 
-                    const isAdvancedMale = def.gender === Gender.Male && [UnitType.Infantry, UnitType.Shaman].includes(unitType);
+                    const isAdvancedMale = def.gender === Gender.Male && [UnitType.Infantry, UnitType.Shaman, UnitType.StoneWarrior].includes(unitType);
                     const hasSacrifice = isAdvancedMale ? garrisonedUnits.some(u => u.type === UnitType.Tribesman) : true;
 
                     const canAfford = player.gold >= (def.cost.gold ?? 0)
@@ -231,6 +238,7 @@ const CityScreen: React.FC<CityScreenProps> = ({ cityId, onClose }) => {
                               {unitType === UnitType.Infantry && <InfantryIcon className="w-8 h-8" />}
                               {unitType === UnitType.Tank && <TankIcon className="w-8 h-8" />}
                               {unitType === UnitType.Shaman && <ShamanIcon className="w-8 h-8" />}
+                              {unitType === UnitType.StoneWarrior && <StoneWarriorIcon className="w-8 h-8" />}
                               <div>
                                   <p className="font-bold">{unitType}</p>
                                   <ResourceCostDisplay cost={def.cost} />
@@ -294,16 +302,14 @@ const renderBuildingProduction = () => {
     )
 }
 
-  // FIX: city.level can be inferred as 'unknown' after state cloning. Using Number() ensures it is treated as a number.
-  const buildingSlots = Array.from({ length: Number(city.level) });
-  // FIX: Explicitly cast productionFocus and totalWorkPoints to Number to prevent type errors from state cloning. This resolves cascading errors in subsequent calculations.
   const productionPoints = Number(totalWorkPoints) * (Number(productionFocus) / 100);
   const gatheringPoints = Number(totalWorkPoints) * ((100 - Number(productionFocus)) / 100);
   const focusedResourcesCount = Object.values(resourceFocus).filter(v => v).length;
   const pointsPerResource = focusedResourcesCount > 0 ? gatheringPoints / focusedResourcesCount : 0;
   const projectedYield = Math.round(pointsPerResource * GATHERING_YIELD_PER_POINT);
-  // FIX: Explicitly type reduce callback parameters to prevent 'unknown' type error.
   const totalStoredResources = Object.values(city.localResources).reduce((sum: number, val: unknown) => sum + (Number(val) || 0), 0);
+  // FIX: Explicitly cast city.level to a number to prevent type errors after state cloning.
+  const buildingSlots = Array.from({ length: Number(city.level) });
 
   return (
     <div 
@@ -359,7 +365,6 @@ const renderBuildingProduction = () => {
              <div>
                 <h3 className="text-lg font-semibold text-gray-300 mb-1">Local Resource Storage</h3>
                 <div className="w-full h-2.5 bg-gray-700 rounded-full overflow-hidden border border-black my-1">
-                    {/* FIX: The type of `city.storageCapacity` can be inferred as `unknown` due to state cloning. Using Number() ensures it is treated as a number for the calculation. */}
                     <div className="bg-yellow-500 h-full rounded-full" style={{ width: `${(totalStoredResources / Number(city.storageCapacity)) * 100}%`}}></div>
                 </div>
                 <p className="text-right text-xs">{totalStoredResources} / {city.storageCapacity}</p>
@@ -417,10 +422,11 @@ const renderBuildingProduction = () => {
           
           {/* Middle Column: Buildings & Workforce */}
           <div className="md:col-span-1">
-             <h3 className="text-lg font-semibold text-gray-300 mb-2">Buildings ({city.buildings.length} / {city.level})</h3>
+{/* FIX: Use Array.isArray to safely get length of city.buildings, which can be affected by state cloning. */}
+             <h3 className="text-lg font-semibold text-gray-300 mb-2">Buildings ({(Array.isArray(city.buildings) ? city.buildings.length : 0)} / {Number(city.level)})</h3>
              <div className="grid grid-cols-2 gap-2">
                 {buildingSlots.map((_, index) => {
-                    const buildingType = city.buildings[index];
+                    const buildingType = (city.buildings as BuildingType[])[index];
                     if (buildingType) {
                         const def = BUILDING_DEFINITIONS[buildingType];
                         return (
@@ -430,9 +436,10 @@ const renderBuildingProduction = () => {
                             </div>
                         )
                     }
-                    const isSlotQueued = city.buildQueue.some(item => item.type === 'building');
-                    // FIX: city.level can be inferred as 'unknown' after state cloning. Using Number() ensures it is treated as a number for the comparison.
-                    if (isCurrentPlayerCity && !isSlotQueued && city.buildings.length < Number(city.level) && index === city.buildings.length) {
+                    const isSlotQueued = (city.buildQueue as BuildQueueItem[]).some(item => item.type === 'building');
+                    const numBuildings = (Array.isArray(city.buildings) ? city.buildings.length : 0);
+                    const cityLevel = Number(city.level);
+                    if (isCurrentPlayerCity && !isSlotQueued && numBuildings < cityLevel && index === numBuildings) {
                          return <div key={index} className="bg-gray-900/50 p-2 rounded-lg flex items-center justify-center h-24 text-gray-500 italic">Empty Slot</div>
                     }
                     return <div key={index} className="bg-gray-900/80 rounded-lg h-24"></div>

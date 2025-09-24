@@ -3,7 +3,8 @@ import { GameState, AxialCoords, UnitType, BuildingType, BuildQueueItem, ArmyDep
 import { deepCloneGameState } from '../utils/gameStateUtils';
 import { 
     initializeGameState,
-    processHexClick,
+    processMoveArmy,
+    processClaimTile,
     processFinalizeCampSetup,
     processBreakCamp,
     processDeployArmy,
@@ -27,14 +28,17 @@ import {
     finalizeTurn,
     processConfirmTransfer
 } from '../utils/gameLogic';
+import { resolveAutoBattle } from '../utils/combatLogic';
 
 interface GameStateSlice {
     gameState: GameState | null;
     
     // Actions
-    startGame: (width: number, height: number, seed?: string) => void;
+    startGame: (width: number, height: number, numAIPlayers: number, seed?: string) => void;
     endTurn: () => void;
-    hexClick: (payload: { coords: AxialCoords; selectedArmyId: string | null; reachableHexes: Set<string>; attackableHexes: Set<string>; expandableHexes: Set<string>; pathCosts: Map<string, number>; selectedHex: AxialCoords | null; }) => void;
+    moveArmy: (payload: { armyId: string; targetCoords: AxialCoords; pathCost: number; }) => void;
+    claimTile: (payload: { cityId: string; tileKey: string; }) => void;
+    autoBattle: (payload: { attackerId: string; defenderId: string; defenderType: 'army' | 'city'; }) => void;
     finalizeCampSetup: (payload: { armyId: string; selectedTileKeys: string[] }) => void;
     breakCamp: (payload: { armyId: string }) => void;
     deployArmy: (payload: { deploymentInfo: ArmyDeploymentInfo; targetPosition: AxialCoords }) => void;
@@ -48,6 +52,7 @@ interface GameStateSlice {
     updateCampFocus: (payload: { armyId: string; focus: { productionFocus: number; resourceFocus: Army['resourceFocus']} }) => void;
     dropResource: (payload: { containerId: string, containerType: 'city' | 'army', resource: keyof ResourceCost, amount: number }) => void;
     confirmTransfer: (payload: { transferInfo: TransferInfo; finalSourceUnitIds: string[]; finalDestinationUnitIds: string[] }) => void;
+    dismissBattleReport: () => void;
     
     // Direct state setter for special cases (e.g., AI turn)
     _setGameState: (newState: GameState) => void;
@@ -56,7 +61,7 @@ interface GameStateSlice {
 export const useGameStore = create<GameStateSlice>((set, get) => ({
     gameState: null,
     
-    startGame: (width, height, seed) => set({ gameState: initializeGameState(width, height, seed) }),
+    startGame: (width, height, numAIPlayers, seed) => set({ gameState: initializeGameState(width, height, numAIPlayers, seed) }),
     
     endTurn: () => {
         const currentState = get().gameState;
@@ -78,10 +83,24 @@ export const useGameStore = create<GameStateSlice>((set, get) => ({
         set({ gameState: tempGs });
     },
     
-    hexClick: (payload) => {
+    moveArmy: (payload) => {
         const currentState = get().gameState;
         if (currentState) {
-            set({ gameState: processHexClick(currentState, payload) });
+            set({ gameState: processMoveArmy(currentState, payload) });
+        }
+    },
+
+    claimTile: (payload) => {
+        const currentState = get().gameState;
+        if (currentState) {
+            set({ gameState: processClaimTile(currentState, payload) });
+        }
+    },
+
+    autoBattle: (payload) => {
+        const currentState = get().gameState;
+        if (currentState) {
+            set({ gameState: resolveAutoBattle(currentState, payload.attackerId, payload.defenderId, payload.defenderType) });
         }
     },
 
@@ -173,6 +192,15 @@ export const useGameStore = create<GameStateSlice>((set, get) => ({
         const currentState = get().gameState;
         if (currentState) {
             set({ gameState: processConfirmTransfer(currentState, payload) });
+        }
+    },
+
+    dismissBattleReport: () => {
+        const currentState = get().gameState;
+        if (currentState) {
+            const newGs = deepCloneGameState(currentState);
+            delete newGs.battleReport;
+            set({ gameState: newGs });
         }
     },
 
