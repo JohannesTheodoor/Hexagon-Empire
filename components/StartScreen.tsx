@@ -34,19 +34,19 @@ const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
                 onClick={() => onStartGame('small', aiPlayers, seed)}
                 className="px-8 py-4 bg-gray-700 hover:bg-green-600 rounded-lg text-xl font-bold transition-colors duration-300 transform hover:scale-105"
               >
-                Small <span className="block text-sm font-normal text-gray-400">(25 x 17)</span>
+                Small <span className="block text-sm font-normal text-gray-400">(40 x 28)</span>
               </button>
               <button
                 onClick={() => onStartGame('medium', aiPlayers, seed)}
                 className="px-8 py-4 bg-gray-700 hover:bg-yellow-600 rounded-lg text-xl font-bold transition-colors duration-300 transform hover:scale-105"
               >
-                Medium <span className="block text-sm font-normal text-gray-400">(35 x 25)</span>
+                Medium <span className="block text-sm font-normal text-gray-400">(60 x 42)</span>
               </button>
               <button
                 onClick={() => onStartGame('large', aiPlayers, seed)}
                 className="px-8 py-4 bg-gray-700 hover:bg-red-600 rounded-lg text-xl font-bold transition-colors duration-300 transform hover:scale-105"
               >
-                Large <span className="block text-sm font-normal text-gray-400">(50 x 35)</span>
+                Large <span className="block text-sm font-normal text-gray-400">(80 x 56)</span>
               </button>
             </div>
              <div className="mt-8">

@@ -1,19 +1,9 @@
 
 
-
-
-
-
-
-
-
-
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { GameState, UnitType, Unit, TerrainType, CampBuildingType, BuildQueueItem, Gender, Army, ResourceCost } from '../types';
 import { UNIT_DEFINITIONS, TERRAIN_DEFINITIONS, CAMP_BUILDING_DEFINITIONS, GATHERING_YIELD_PER_POINT } from '../constants';
-import { CloseIcon, ResearchIcon, PlusIcon, InfantryIcon, TankIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, PalisadeIcon, ScoutTentIcon, ForagingPostIcon, WoodIcon, StoneIcon, HidesIcon, ObsidianIcon, StoragePitIcon, ArrowDownIcon, FirePitIcon, FoodIcon, DryingRackIcon, SicknessIcon, ArrowUpIcon, HealersTentIcon, TentIcon, UsersIcon, ToolmakersShelterIcon } from './Icons';
+import { CloseIcon, ResearchIcon, PlusIcon, InfantryIcon, TankIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, PalisadeIcon, ScoutTentIcon, ForagingPostIcon, WoodIcon, StoneIcon, HidesIcon, ObsidianIcon, StoragePitIcon, ArrowDownIcon, FirePitIcon, FoodIcon, DryingRackIcon, SicknessIcon, ArrowUpIcon, HealersTentIcon, TentIcon, UsersIcon, ToolmakersShelterIcon, HunterIcon } from './Icons';
 import StackedUnitCard from './StackedUnitCard';
 import { axialToString } from '../utils/hexUtils';
 import { useGameStore } from '../store/gameStore';
@@ -72,6 +62,7 @@ const renderQueueItemIcon = (item: BuildQueueItem) => {
             case UnitType.Tribeswoman: return <TribeswomanIcon className={iconClass} />;
             case UnitType.Child: return <ChildIcon className={iconClass} />;
             case UnitType.Shaman: return <ShamanIcon className={iconClass} />;
+            case UnitType.Hunter: return <HunterIcon className={iconClass} />;
             default: return null;
         }
     } else {
@@ -218,7 +209,7 @@ const CampScreen: React.FC<CampScreenProps> = ({ armyId, onClose }) => {
   const risk = army.sicknessRisk ?? 0;
   const riskColor = risk > 50 ? 'bg-red-500' : risk > 20 ? 'bg-yellow-500' : 'bg-green-500';
 
-  const housingCapacity = army.tentLevel ? CAMP_BUILDING_DEFINITIONS[CampBuildingType.Tent].housingCapacity! * Math.pow(2, army.tentLevel - 1) : 0;
+  const housingCapacity = army.tentLevel ? CAMP_BUILDING_DEFINITIONS[CampBuildingType.Tent].housingCapacity! * Math.pow(2, Number(army.tentLevel) - 1) : 0;
   const overcrowdingPercentage = housingCapacity > 0 ? Math.min(100, (garrisonedUnits.length / housingCapacity) * 100) : (garrisonedUnits.length > 0 ? 100 : 0);
   const isOvercrowded = garrisonedUnits.length > housingCapacity;
   const overcrowdingBarColor = isOvercrowded ? 'bg-red-500' : overcrowdingPercentage > 80 ? 'bg-yellow-500' : 'bg-green-500';
@@ -239,14 +230,14 @@ const CampScreen: React.FC<CampScreenProps> = ({ armyId, onClose }) => {
   
   const handleProduceInCamp = (itemType: UnitType | CampBuildingType, type: 'unit' | 'building') => {
     const def = type === 'unit' ? UNIT_DEFINITIONS[itemType as UnitType] : CAMP_BUILDING_DEFINITIONS[itemType as CampBuildingType];
-    const isAdvancedMale = type === 'unit' && (def as any).gender === Gender.Male && [UnitType.Infantry, UnitType.Shaman].includes(itemType as UnitType);
+    const isAdvancedMale = type === 'unit' && (def as any).gender === Gender.Male && [UnitType.Infantry, UnitType.Shaman, UnitType.StoneWarrior].includes(itemType as UnitType);
     const hasSacrifice = !isAdvancedMale || garrisonedUnits.some(u => u.type === UnitType.Tribesman);
     
     let cost = def.cost;
     if (itemType === CampBuildingType.Tent) {
         const baseDef = CAMP_BUILDING_DEFINITIONS[CampBuildingType.Tent];
         const queuedTentUpgrades = army.buildQueue?.filter(item => item.itemType === CampBuildingType.Tent).length ?? 0;
-        const currentTentLevel = (army.tentLevel ?? 0) + queuedTentUpgrades;
+        const currentTentLevel = (Number(army.tentLevel ?? 0)) + queuedTentUpgrades;
         const costMultiplier = Math.pow(2, currentTentLevel);
         cost = Object.entries(baseDef.cost).reduce((acc, [key, value]) => {
             acc[key as keyof ResourceCost] = value * costMultiplier;
@@ -279,7 +270,7 @@ const CampScreen: React.FC<CampScreenProps> = ({ armyId, onClose }) => {
                     const def = UNIT_DEFINITIONS[unitType];
                     const hasRequiredTech = !def.requiredTech || player.unlockedTechs.includes(def.requiredTech);
                     if (!hasRequiredTech) return null;
-                    const isAdvancedMale = def.gender === Gender.Male && [UnitType.Infantry, UnitType.Shaman].includes(unitType);
+                    const isAdvancedMale = def.gender === Gender.Male && [UnitType.Infantry, UnitType.Shaman, UnitType.StoneWarrior].includes(unitType);
                     const hasSacrifice = isAdvancedMale ? garrisonedUnits.some(u => u.type === UnitType.Tribesman) : true;
                     
                     const canAfford = player.gold >= (def.cost.gold ?? 0)
@@ -295,6 +286,7 @@ const CampScreen: React.FC<CampScreenProps> = ({ armyId, onClose }) => {
                               {unitType === UnitType.Infantry && <InfantryIcon className="w-8 h-8" />}
                               {unitType === UnitType.Tank && <TankIcon className="w-8 h-8" />}
                               {unitType === UnitType.Shaman && <ShamanIcon className="w-8 h-8" />}
+                              {unitType === UnitType.Hunter && <HunterIcon className="w-8 h-8" />}
                               <div>
                                   <p className="font-bold">{unitType}</p>
                                   <ResourceCostDisplay cost={def.cost} />
@@ -323,7 +315,7 @@ const CampScreen: React.FC<CampScreenProps> = ({ armyId, onClose }) => {
                     if (buildingType === CampBuildingType.Tent) {
                         const tentDef = CAMP_BUILDING_DEFINITIONS[CampBuildingType.Tent];
                         const queuedTentUpgrades = army.buildQueue?.filter(item => item.itemType === CampBuildingType.Tent).length ?? 0;
-                        const effectiveTentLevel = (army.tentLevel ?? 0) + queuedTentUpgrades;
+                        const effectiveTentLevel = (Number(army.tentLevel ?? 0)) + queuedTentUpgrades;
                         const costMultiplier = Math.pow(2, effectiveTentLevel);
 
                         const tentCost = Object.entries(tentDef.cost).reduce((acc, [key, value]) => {
@@ -570,7 +562,7 @@ const CampScreen: React.FC<CampScreenProps> = ({ armyId, onClose }) => {
           
           {/* Middle Column: Buildings & Workforce */}
           <div className="md:col-span-1">
-             <h3 className="text-lg font-semibold text-gray-300 mb-2">Buildings ({((army.buildings?.length ?? 0) + (army.tentLevel ? 1 : 0))} / {army.level})</h3>
+             <h3 className="text-lg font-semibold text-gray-300 mb-2">Buildings ({((Array.isArray(army.buildings) ? army.buildings.length : 0) + (army.tentLevel ? 1 : 0))} / {Number(army.level)})</h3>
              <div className="grid grid-cols-2 gap-2">
                 {army.tentLevel && army.tentLevel > 0 && (
                     <div key="tent" className="bg-gray-700/50 p-2 rounded-lg flex flex-col items-center justify-center text-center h-24" title={CAMP_BUILDING_DEFINITIONS[CampBuildingType.Tent].description}>
@@ -587,10 +579,13 @@ const CampScreen: React.FC<CampScreenProps> = ({ armyId, onClose }) => {
                         </div>
                     )
                 })}
-                {/* FIX: The left-hand side of an arithmetic operation may be an invalid type due to state cloning.
-                    Explicitly casting army.level, army.buildings.length, and army.tentLevel to numbers ensures type safety for the subtraction. */}
                 {(() => {
-                    const emptySlots = Number(army.level) - ((Array.isArray(army.buildings) ? army.buildings.length : 0) + (army.tentLevel ? 1 : 0));
+                    // FIX: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+                    // This is caused by state cloning stripping type information. Safely cast properties to numbers.
+                    const armyLevel = Number(army.level ?? 0);
+                    const buildingsCount = Array.isArray(army.buildings) ? army.buildings.length : 0;
+                    const tentCount = army.tentLevel ? 1 : 0;
+                    const emptySlots = armyLevel - (buildingsCount + tentCount);
                     if (emptySlots <= 0) return null;
 
                     return Array.from({ length: emptySlots }).map((_, index) => {

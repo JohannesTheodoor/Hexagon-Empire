@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { GameState, Unit, UnitType, Army } from '../types';
-import { CloseIcon, InfantryIcon, TankIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, StoneWarriorIcon } from './Icons';
+import { CloseIcon, InfantryIcon, TankIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, StoneWarriorIcon, HunterIcon } from './Icons';
 import { useGameStore } from '../store/gameStore';
 
 interface CreateArmyScreenProps {
@@ -39,6 +39,7 @@ const UnitQuantitySelector: React.FC<{
             {unitType === UnitType.Child && <ChildIcon className="w-8 h-8 flex-shrink-0" />}
             {unitType === UnitType.Shaman && <ShamanIcon className="w-8 h-8 flex-shrink-0" />}
             {unitType === UnitType.StoneWarrior && <StoneWarriorIcon className="w-8 h-8 flex-shrink-0" />}
+            {unitType === UnitType.Hunter && <HunterIcon className="w-8 h-8 flex-shrink-0" />}
             <div className="flex-grow">
                 <p className="font-semibold">{unitType}</p>
                 <p className="text-xs text-gray-400">Available: {availableCount}</p>

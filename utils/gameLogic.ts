@@ -108,13 +108,13 @@ export function initializeGameState(width: number, height: number, numAIPlayers:
         for (let j = 0; j < 5; j++) {
             const manDef = UNIT_DEFINITIONS[UnitType.Tribesman];
             const manId = generateId();
-            const manUnit = { id: manId, type: UnitType.Tribesman, ownerId: player.id, hp: manDef.maxHp, foodStored: 0, gender: Gender.Male, attackBonus: 0, defenseBonus: 0 };
+            const manUnit = { id: manId, type: UnitType.Tribesman, ownerId: player.id, hp: manDef.maxHp, morale: manDef.maxMorale, foodStored: 0, gender: Gender.Male, attackBonus: 0, defenseBonus: 0 };
             units.set(manId, manUnit);
             startGarrisonUnits.push(manUnit);
 
             const womanDef = UNIT_DEFINITIONS[UnitType.Tribeswoman];
             const womanId = generateId();
-            const womanUnit = { id: womanId, type: UnitType.Tribeswoman, ownerId: player.id, hp: womanDef.maxHp, foodStored: 0, gender: Gender.Female, attackBonus: 0, defenseBonus: 0 };
+            const womanUnit = { id: womanId, type: UnitType.Tribeswoman, ownerId: player.id, hp: womanDef.maxHp, morale: womanDef.maxMorale, foodStored: 0, gender: Gender.Female, attackBonus: 0, defenseBonus: 0 };
             units.set(womanId, womanUnit);
             startGarrisonUnits.push(womanUnit);
         }
@@ -618,7 +618,7 @@ export function processCancelProduction(gs: GameState, payload: { containerId: s
     if (isAdvancedMale) {
         const tribesmanDef = UNIT_DEFINITIONS[UnitType.Tribesman];
         const newUnitId = generateId();
-        const newUnit: Unit = { id: newUnitId, type: UnitType.Tribesman, ownerId: player.id, hp: tribesmanDef.maxHp, foodStored: 0, gender: Gender.Male, attackBonus: 0, defenseBonus: 0 };
+        const newUnit: Unit = { id: newUnitId, type: UnitType.Tribesman, ownerId: player.id, hp: tribesmanDef.maxHp, morale: tribesmanDef.maxMorale, foodStored: 0, gender: Gender.Male, attackBonus: 0, defenseBonus: 0 };
         newGs.units.set(newUnitId, newUnit);
         if (containerType === 'city') {
             (container as City).garrison.push(newUnitId);
@@ -915,7 +915,7 @@ export function processProductionAndGathering(gs: GameState): GameState {
                 if (item.type === 'unit') {
                     const unitDef = UNIT_DEFINITIONS[item.itemType as UnitType];
                     const newUnitId = generateId();
-                    newGs.units.set(newUnitId, { id: newUnitId, type: item.itemType as UnitType, ownerId: container.ownerId, hp: unitDef.maxHp, foodStored: 0, gender: unitDef.gender ?? Gender.None, attackBonus: 0, defenseBonus: 0 });
+                    newGs.units.set(newUnitId, { id: newUnitId, type: item.itemType as UnitType, ownerId: container.ownerId, hp: unitDef.maxHp, morale: unitDef.maxMorale, foodStored: 0, gender: unitDef.gender ?? Gender.None, attackBonus: 0, defenseBonus: 0 });
                     if ('garrison' in container) { 
                         container.garrison.push(newUnitId);
                     } else { 
@@ -1022,6 +1022,7 @@ export function processPopulation(gs: GameState): GameState {
             unit.type = unit.gender === Gender.Male ? UnitType.Tribesman : UnitType.Tribeswoman;
             const newDef = UNIT_DEFINITIONS[unit.type];
             unit.hp = newDef.maxHp;
+            unit.morale = newDef.maxMorale;
             unit.attackBonus = 0;
             unit.defenseBonus = 0;
             delete unit.age;
@@ -1042,6 +1043,7 @@ export function processPopulation(gs: GameState): GameState {
                         type: UnitType.Child, 
                         ownerId: currentPlayerId, 
                         hp: childDef.maxHp, 
+                        morale: childDef.maxMorale,
                         foodStored: 0, 
                         age: 0,
                         gender: Math.random() < 0.5 ? Gender.Male : Gender.Female,

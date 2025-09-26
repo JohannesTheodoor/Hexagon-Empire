@@ -1,10 +1,11 @@
 
+
 import { TerrainType, TerrainDefinition, UnitType, UnitDefinition, UnitSize, BuildingType, BuildingDefinition, Gender, CampBuildingType, CampBuildingDefinition } from './types';
 
 export const MAP_SIZES = {
-    small: { width: 25, height: 17 },
-    medium: { width: 35, height: 25 },
-    large: { width: 50, height: 35 },
+    small: { width: 40, height: 28 },
+    medium: { width: 60, height: 42 },
+    large: { width: 80, height: 56 },
 };
 
 export const MAP_WIDTH = 25;
@@ -67,45 +68,59 @@ export const TERRAIN_DEFINITIONS: Record<TerrainType, TerrainDefinition> = {
 
 export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     [UnitType.Infantry]: { 
-        movement: 2, cost: { gold: 10, hides: 5 }, productionCost: 300, attack: 6, defense: 3, maxHp: 10, 
+        movement: 2, cost: { gold: 10, hides: 5 }, productionCost: 300, attack: 6, defense: 3, maxHp: 10, maxMorale: 15,
         size: UnitSize.Small, foodGatherRate: 1, foodConsumption: 3, 
         productionYield: 1, carryCapacity: 3, foodCarryCapacity: 2, researchYield: 0, healingBonus: 0,
         gender: Gender.Male,
+        hasRangedAttack: false, rangedAttack: 0, rangedAttackRange: 0,
     },
     [UnitType.Tank]: { 
-        movement: 4, cost: { gold: 25, stone: 15 }, productionCost: 800, attack: 10, defense: 6, maxHp: 20, 
+        movement: 4, cost: { gold: 25, stone: 15 }, productionCost: 800, attack: 10, defense: 6, maxHp: 20, maxMorale: 15,
         size: UnitSize.Large, foodGatherRate: 0, foodConsumption: 5, 
         productionYield: 0, carryCapacity: 5, foodCarryCapacity: 0, requiredTech: 'forging', researchYield: 0, healingBonus: 0,
         gender: Gender.None,
+        hasRangedAttack: false, rangedAttack: 0, rangedAttackRange: 0,
     },
     [UnitType.Tribesman]: { 
-        movement: 1, cost: { gold: 5 }, productionCost: 100, attack: 1, defense: 1, maxHp: 5, 
+        movement: 1, cost: { gold: 5 }, productionCost: 100, attack: 1, defense: 1, maxHp: 5, maxMorale: 20,
         size: UnitSize.Small, foodGatherRate: 1, foodConsumption: 1, 
         productionYield: 2, carryCapacity: 2, foodCarryCapacity: 1, researchYield: 0, healingBonus: 0,
         gender: Gender.Male,
+        hasRangedAttack: false, rangedAttack: 0, rangedAttackRange: 0,
     },
     [UnitType.Tribeswoman]: { 
-        movement: 1, cost: { gold: 5 }, productionCost: 100, attack: 1, defense: 1, maxHp: 5, 
+        movement: 1, cost: { gold: 5 }, productionCost: 100, attack: 1, defense: 1, maxHp: 5, maxMorale: 10,
         size: UnitSize.Small, foodGatherRate: 2, foodConsumption: 1, 
         productionYield: 1, carryCapacity: 1, foodCarryCapacity: 2, researchYield: 0, healingBonus: 0,
         gender: Gender.Female,
+        hasRangedAttack: false, rangedAttack: 0, rangedAttackRange: 0,
     },
     [UnitType.Child]: {
-        movement: 1, cost: {}, productionCost: 0, attack: 0, defense: 0, maxHp: 3,
+        movement: 1, cost: {}, productionCost: 0, attack: 0, defense: 0, maxHp: 3, maxMorale: 0,
         size: UnitSize.Small, foodGatherRate: 0, foodConsumption: 1,
-        productionYield: 0, carryCapacity: 0, foodCarryCapacity: 0, researchYield: 0, healingBonus: 0
+        productionYield: 0, carryCapacity: 0, foodCarryCapacity: 0, researchYield: 0, healingBonus: 0,
+        hasRangedAttack: false, rangedAttack: 0, rangedAttackRange: 0,
     },
     [UnitType.Shaman]: {
-        movement: 1, cost: { wood: 1, hides: 2, obsidian: 1 }, productionCost: 100, attack: 1, defense: 2, maxHp: 8,
+        movement: 1, cost: { wood: 1, hides: 2, obsidian: 1 }, productionCost: 100, attack: 1, defense: 2, maxHp: 8, maxMorale: 30,
         size: UnitSize.Small, foodGatherRate: 0, foodConsumption: 2,
         productionYield: 0, carryCapacity: 1, foodCarryCapacity: 2, researchYield: 1, healingBonus: 1,
         gender: Gender.Male, requiredTech: 'herbal_lore',
+        hasRangedAttack: false, rangedAttack: 0, rangedAttackRange: 0,
     },
     [UnitType.StoneWarrior]: {
-        movement: 1, cost: { wood: 1, hides: 1, obsidian: 2 }, productionCost: 55, attack: 5, defense: 3, maxHp: 8,
+        movement: 1, cost: { wood: 1, hides: 1, obsidian: 2 }, productionCost: 55, attack: 5, defense: 3, maxHp: 8, maxMorale: 40,
         size: UnitSize.Small, foodGatherRate: 1, foodConsumption: 2,
         productionYield: 0, carryCapacity: 2, foodCarryCapacity: 1, researchYield: 0, healingBonus: 0,
         gender: Gender.Male, requiredTech: 'obsidian_knapping',
+        hasRangedAttack: false, rangedAttack: 0, rangedAttackRange: 0,
+    },
+    [UnitType.Hunter]: {
+        movement: 3, cost: { wood: 1, stone: 1, hides: 1 }, productionCost: 100, attack: 2, defense: 1, maxHp: 8, maxMorale: 30,
+        size: UnitSize.Small, foodGatherRate: 3, foodConsumption: 2,
+        productionYield: 0, carryCapacity: 0, foodCarryCapacity: 3, researchYield: 0, healingBonus: 0,
+        gender: Gender.Male,
+        hasRangedAttack: true, rangedAttack: 3, rangedAttackRange: 2,
     }
 };
 

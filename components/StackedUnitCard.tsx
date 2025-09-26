@@ -1,7 +1,7 @@
 import React from 'react';
 import { Unit, UnitType } from '../types';
 import { UNIT_DEFINITIONS } from '../constants';
-import { InfantryIcon, TankIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, StoneWarriorIcon } from './Icons';
+import { InfantryIcon, TankIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, StoneWarriorIcon, HunterIcon } from './Icons';
 
 interface StackedUnitCardProps {
   unitType: UnitType;
@@ -30,6 +30,7 @@ const StackedUnitCard: React.FC<StackedUnitCardProps> = ({ unitType, units }) =>
             case UnitType.Child: return <ChildIcon className={iconClass} />;
             case UnitType.Shaman: return <ShamanIcon className={iconClass} />;
             case UnitType.StoneWarrior: return <StoneWarriorIcon className={iconClass} />;
+            case UnitType.Hunter: return <HunterIcon className={iconClass} />;
             default: return null;
         }
     }

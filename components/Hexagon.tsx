@@ -1,8 +1,9 @@
 import React from 'react';
 import { HEX_SIZE, TERRAIN_DEFINITIONS, UNIT_DEFINITIONS, CITY_HP } from '../constants';
 import { Hex, Unit, City, Player, Army } from '../types';
-import { InfantryIcon, TankIcon, CityIcon, FoodIcon, PlusIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, CampIcon, SicknessIcon, StoneWarriorIcon } from './Icons';
+import { InfantryIcon, TankIcon, CityIcon, FoodIcon, PlusIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, CampIcon, SicknessIcon, StoneWarriorIcon, HunterIcon } from './Icons';
 import { UnitType } from '../types';
+import TerrainPatterns, { terrainPatternIds } from './TerrainPatterns';
 
 interface HexagonProps {
   hex: Hex;
@@ -93,6 +94,8 @@ const Hexagon: React.FC<HexagonProps> = ({ hex, army, unitsInArmy, city, player,
         return <ShamanIcon className={iconClass} />;
       case UnitType.StoneWarrior:
         return <StoneWarriorIcon className={iconClass} />;
+      case UnitType.Hunter:
+        return <HunterIcon className={iconClass} />;
       default:
         return null;
     }
@@ -183,9 +186,10 @@ const Hexagon: React.FC<HexagonProps> = ({ hex, army, unitsInArmy, city, player,
                     className="w-full h-full"
                     style={{ transform: `translateY(-${(RENDER_SIZE * 2 - RENDER_SIZE * Math.sqrt(3))/2}px)` }}
                 >
+                    <TerrainPatterns />
                     <polygon
                         points={renderPoints}
-                        fill={terrain.color}
+                        fill={`url(#${terrainPatternIds[hex.terrain]})`}
                         stroke={isSelected ? '#fde047' : '#00000050'}
                         strokeWidth={isSelected ? 6 : 2}
                         className="transition-all duration-150"

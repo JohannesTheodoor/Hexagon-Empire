@@ -1,7 +1,7 @@
 import React from 'react';
 import { GameState, AxialCoords, Unit, UnitType, Player, City, Army } from '../types';
 import { axialToString } from '../utils/hexUtils';
-import { InfantryIcon, TankIcon, TribesmanIcon, TribeswomanIcon, PlusIcon, CampIcon, ChildIcon, ShamanIcon, StoneWarriorIcon } from './Icons';
+import { InfantryIcon, TankIcon, TribesmanIcon, TribeswomanIcon, PlusIcon, CampIcon, ChildIcon, ShamanIcon, StoneWarriorIcon, HunterIcon } from './Icons';
 import { UNIT_DEFINITIONS } from '../constants';
 import { useGameStore } from '../store/gameStore';
 
@@ -42,6 +42,7 @@ const UnitIconCard: React.FC<{
             case UnitType.Child: return <ChildIcon className={iconClass} />;
             case UnitType.Shaman: return <ShamanIcon className={iconClass} />;
             case UnitType.StoneWarrior: return <StoneWarriorIcon className={iconClass} />;
+            case UnitType.Hunter: return <HunterIcon className={iconClass} />;
             default: return null;
         }
     };

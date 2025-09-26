@@ -24,6 +24,12 @@ export const StoneWarriorIcon: React.FC<{ className?: string }> = ({ className }
     </svg>
 );
 
+export const HunterIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M22 5.5h-3.07C18.4 4.04 16.88 3 15 3c-1.88 0-3.4 1.04-3.93 2.5H2v2h9.07C11.6 8.96 13.12 10 15 10c1.88 0 3.4-1.04 3.93-2.5H22v-2zm-7 3c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zM9 13.5c-2.49 0-4.5 2.01-4.5 4.5S6.51 22.5 9 22.5s4.5-2.01 4.5-4.5-2.01-4.5-4.5-4.5zm0 7c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5zM21 16l-4-4v3h-4v2h4v3l4-4z"/>
+    </svg>
+);
+
 export const TribeswomanIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
         <path d="M12 6c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2m0 10c2.7 0 5.8 1.29 6 2H6c.23-.72 3.31-2 6-2m0-12C9.79 4 8 5.79 8 8s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 10c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
@@ -265,8 +271,9 @@ export const MountaineeringIcon: React.FC<{ className?: string }> = ({ className
     </svg>
 );
 
-export const SicknessIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+// FIX: Update SicknessIcon to accept standard SVG props to allow for attributes like 'title'.
+export const SicknessIcon: React.FC<React.SVGProps<SVGSVGElement> & { title?: string }> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" {...props}>
         <path d="M16 7h-2.2c-.5-1.4-1.8-2.5-3.4-2.5C8.6 4.5 7.3 5.6 6.8 7H4.5C4.2 7 4 7.2 4 7.5S4.2 8 4.5 8h2.3c.4 1 .9 1.8 1.5 2.4V11H7.5c-.3 0-.5.2-.5.5s.2.5.5.5h1.3v.6c-.9.5-1.6 1.4-2 2.4H4.5c-.3 0-.5.2-.5.5s.2.5.5.5h2.2c.5 1.4 1.8 2.5 3.4 2.5 1.8 0 3.2-1.3 3.4-3h2.2c.3 0 .5-.2.5-.5s-.2-.5-.5-.5h-2.2c-.5-1.4-1.8-2.5-3.4-2.5-.9 0-1.8.4-2.4 1.1v-1.2h1.2c.3 0 .5-.2.5-.5s-.2-.5-.5-.5H9.7v-.6c.9-.5 1.6-1.4 2-2.4h2.2c.3 0 .5-.2.5-.5S16.3 7 16 7zM12 17c-1 0-1.9-.5-2.4-1.3h4.8c-.5.8-1.4 1.3-2.4 1.3zm0-6c-.6 0-1-.4-1-1s.4-1 1-1 1 .4 1 1-.4 1-1 1zm-2.4-2.7h4.8c-.5-.8-1.4-1.3-2.4-1.3s-1.9.5-2.4 1.3z"/>
     </svg>
 );
@@ -305,4 +312,28 @@ export const TransferIcon: React.FC<{ className?: string }> = ({ className }) =>
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
         <path d="M16.59 7.41L12 2.83 7.41 7.41 6 6l6-6 6 6-1.41 1.41zM6 18l6 6 6-6-1.41-1.41L12 21.17l-4.59-4.58L6 18zm-4-4h18v-2H2v2z"/>
     </svg>
+);
+
+export const PauseIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+  </svg>
+);
+
+export const PlayIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M8 5v14l11-7L8 5z"/>
+  </svg>
+);
+
+export const FastForwardIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/>
+  </svg>
+);
+
+export const SpeedUpIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M2 6v12l7-6-7-6zm8 0v12l7-6-7-6zm8 0v12l7-6-7-6z"/>
+  </svg>
 );

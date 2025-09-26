@@ -135,7 +135,7 @@ const App: React.FC = () => {
 
         setViewState(prev => {
             const newScale = deltaY < 0 ? prev.scale * zoomFactor : prev.scale / zoomFactor;
-            const clampedScale = Math.max(0.3, Math.min(2.5, newScale));
+            const clampedScale = Math.max(0.2, Math.min(3.0, newScale));
 
             if (clampedScale === prev.scale) return prev;
 

@@ -33,6 +33,12 @@ export function runAITurnLogic(gs: GameState): GameState {
         // Ensure army still exists (might have been merged or destroyed)
         if (!newGs.armies.has(army.id)) continue;
         newGs = manageArmy(newGs, army);
+        
+        // If an army's action resulted in a pending battle against the player,
+        // stop the AI's turn immediately to let the player respond.
+        if (newGs.pendingBattle) {
+            return newGs;
+        }
     }
     
     return newGs;

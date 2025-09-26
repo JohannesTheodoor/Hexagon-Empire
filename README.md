@@ -1,8 +1,28 @@
-# HexGrid Empires - Project Architectuur & AI Richtlijnen
+# HexGrid Empires - Spelconcept & Architectuur
+
+## Spelconcept
+HexGrid Empires is een turn-based 4X-strategiegame met een focus op de evolutie en overleving van een stam. Spelers leiden een beginnende stam van een kleine nederzetting uit tot een uitgestrekt rijk of een veerkrachtige nomadische cultuur. Het doel is om dominantie te bereiken door militaire verovering, technologische vooruitgang of culturele invloed. Het spel benadrukt de keuze tussen een gevestigde, stedenbouwende speelstijl en een mobiele, op kampen gebaseerde nomadische strategie, met unieke mechanismen die beide paden ondersteunen.
+
+## Belangrijkste Spelmechanismen
+- **Dubbele Speelstijl (Nomadisch vs. Gevestigd):** Spelers zijn niet gebonden aan één enkele strategie. Legers kunnen mobiele **kampen** opzetten die functioneren als tijdelijke nederzettingen. Kampen kunnen groeien, in level stijgen, unieke gebouwen construeren en lokale grondstoffen exploiteren, wat een levensvatbaar alternatief biedt voor traditionele stedenbouw.
+- **Dynamisch Cultuursysteem:** Jouw acties vormen direct de identiteit van je stam. De cultuur evolueert langs drie hoofdassen: **Nomadisme vs. Gevestigd**, **Genderrollen (Patriarchaal vs. Matriarchaal)**, en **Militarisme (Defensief vs. Agressief)**. Het bereiken van extremen op deze assen ontgrendelt krachtige Culturele Aspecten die unieke bonussen bieden en je beschaving definiëren.
+- **Overleving en Omgeving:** De wereld is zowel een bron van rijkdom als een bedreiging. Legers en steden moeten hun **voedselvoorraad** beheren om verhongering te voorkomen. De omgeving vormt een **ziekterisico** op basis van terrein, overbevolking en hygiëne, wat spelers dwingt de gezondheid van hun stam te beheren met sjamanen en gespecialiseerde gebouwen.
+- **Diepgaande Technologieboom:** Stuur de technologische vooruitgang van je stam via een vertakkende tech tree, van het beheersen van vuur en basisgereedschappen tot geavanceerde concepten als smeden en zeilen. Ontgrendelingen zijn cruciaal voor nieuwe eenheden, gebouwen en vaardigheden.
+- **Grondstoffenbeheer:** Exploiteer een verscheidenheid aan grondstoffen van de kaart, inclusief hernieuwbare bronnen zoals voedsel en huiden, en uitputbare bronnen zoals steen en obsidiaan. Deze grondstoffen zijn essentieel voor bouw, productie en technologische vooruitgang.
+
+## Toekomstige Ideeën
+- **Diplomatie:** Interacties met andere stammen (handel, allianties, oorlogsverklaringen).
+- **Geavanceerde AI:** Complexere AI-persoonlijkheden en strategische besluitvorming.
+- **Meer Inhoud:** Uitbreiding van de tech tree, toevoegen van meer culturele aspecten, eenheden en gebouwen.
+- **Verhalende Evenementen:** Narratieve gebeurtenissen die keuzes en consequenties voor de speler presenteren.
+
+---
+
+## Project Architectuur & AI Richtlijnen
 
 Dit document dient als leidraad voor de AI-assistent die aan dit project werkt. Het doel is om consistentie te waarborgen, de ontwikkelingssnelheid te verhogen en de stabiliteit van de applicatie te garanderen bij elke wijziging.
 
-## Kernprincipes van de Architectuur
+### Kernprincipes van de Architectuur
 
 Na een significante refactoring volgt het project nu een moderne, schaalbare architectuur. Houd u bij alle wijzigingen aan de volgende principes:
 
@@ -27,7 +47,7 @@ Na een significante refactoring volgt het project nu een moderne, schaalbare arc
 
 ---
 
-## Gouden Regel voor AI-ontwikkeling
+### Gouden Regel voor AI-ontwikkeling
 
 **Behoud van Functionaliteit is Prioriteit #1.**
 
@@ -40,7 +60,7 @@ Bij elke aanvraag om de code aan te passen, geldt de volgende, allerbelangrijkst
 
 Deze regel is cruciaal om onvoorspelbare wijzigingen te voorkomen en ervoor te zorgen dat het spel stabiel blijft.
 
-## Bestandsstructuur Overzicht
+### Bestandsstructuur Overzicht
 
 ```
 /

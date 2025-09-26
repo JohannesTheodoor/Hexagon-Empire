@@ -1,6 +1,6 @@
 import React from 'react';
 import { BattleReport, BattleParticipantReport, BattleReportUnit, UnitType } from '../types';
-import { InfantryIcon, TankIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, StoneWarriorIcon } from './Icons';
+import { InfantryIcon, TankIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, StoneWarriorIcon, HunterIcon } from './Icons';
 
 interface BattleReportScreenProps {
   report: BattleReport;
@@ -16,6 +16,7 @@ const UnitIcon: React.FC<{ unitType: UnitType, className?: string }> = ({ unitTy
         case UnitType.Child: return <ChildIcon className={className} />;
         case UnitType.Shaman: return <ShamanIcon className={className} />;
         case UnitType.StoneWarrior: return <StoneWarriorIcon className={className} />;
+        case UnitType.Hunter: return <HunterIcon className={className} />;
         default: return null;
     }
 };

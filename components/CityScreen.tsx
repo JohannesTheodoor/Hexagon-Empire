@@ -1,20 +1,10 @@
 
 
-
-
-
-
-
-
-
-
-
-
 import React, { useState, useMemo } from 'react';
 // FIX: Added BuildingType to imports to resolve multiple "Cannot find name" errors.
 import { GameState, City, UnitType, BuildQueueItem, Unit, TerrainType, Gender, ResourceCost, Army, BuildingType } from '../types';
 import { BASE_CITY_INCOME, INCOME_PER_INFLUENCE_LEVEL, BUILDING_DEFINITIONS, UNIT_DEFINITIONS, TERRAIN_DEFINITIONS, BASE_CITY_FOOD_STORAGE, GATHERING_YIELD_PER_POINT } from '../constants';
-import { CloseIcon, FoodIcon, InfantryIcon, TankIcon, MarketplaceIcon, GranaryIcon, PlusIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, WoodIcon, StoneIcon, HidesIcon, ObsidianIcon, ArrowDownIcon, SicknessIcon, StoneWarriorIcon } from './Icons';
+import { CloseIcon, FoodIcon, InfantryIcon, TankIcon, MarketplaceIcon, GranaryIcon, PlusIcon, TribesmanIcon, TribeswomanIcon, ChildIcon, ShamanIcon, WoodIcon, StoneIcon, HidesIcon, ObsidianIcon, ArrowDownIcon, SicknessIcon, StoneWarriorIcon, HunterIcon } from './Icons';
 import { TECH_TREE } from '../techtree';
 import StackedUnitCard from './StackedUnitCard';
 import { axialToString } from '../utils/hexUtils';
@@ -37,6 +27,7 @@ const renderQueueItemIcon = (item: BuildQueueItem) => {
             case UnitType.Child: return <ChildIcon className={iconClass} />;
             case UnitType.Shaman: return <ShamanIcon className={iconClass} />;
             case UnitType.StoneWarrior: return <StoneWarriorIcon className={iconClass} />;
+            case UnitType.Hunter: return <HunterIcon className={iconClass} />;
             default: return null;
         }
     } else {
@@ -156,7 +147,7 @@ const CityScreen: React.FC<CityScreenProps> = ({ cityId, onClose }) => {
   
   // FIX: The left-hand side of an arithmetic operation may be an invalid type due to state cloning.
   // Casting city.controlledTiles to string[] and using Number() on its length ensures type safety.
-  let goldFromCity = BASE_CITY_INCOME + (Number((city.controlledTiles as string[]).length) - 1) * INCOME_PER_INFLUENCE_LEVEL;
+  let goldFromCity = BASE_CITY_INCOME + ((Array.isArray(city.controlledTiles) ? city.controlledTiles.length : 0) - 1) * INCOME_PER_INFLUENCE_LEVEL;
   for(const buildingType of city.buildings as BuildingType[]) {
       goldFromCity += BUILDING_DEFINITIONS[buildingType].goldBonus ?? 0;
   }
@@ -239,6 +230,7 @@ const CityScreen: React.FC<CityScreenProps> = ({ cityId, onClose }) => {
                               {unitType === UnitType.Tank && <TankIcon className="w-8 h-8" />}
                               {unitType === UnitType.Shaman && <ShamanIcon className="w-8 h-8" />}
                               {unitType === UnitType.StoneWarrior && <StoneWarriorIcon className="w-8 h-8" />}
+                              {unitType === UnitType.Hunter && <HunterIcon className="w-8 h-8" />}
                               <div>
                                   <p className="font-bold">{unitType}</p>
                                   <ResourceCostDisplay cost={def.cost} />
@@ -302,14 +294,16 @@ const renderBuildingProduction = () => {
     )
 }
 
-  const productionPoints = Number(totalWorkPoints) * (Number(productionFocus) / 100);
-  const gatheringPoints = Number(totalWorkPoints) * ((100 - Number(productionFocus)) / 100);
+  // FIX: Explicitly cast values to Number to prevent "unknown" type errors from state cloning.
+  const productionFactor = Number(productionFocus) / 100;
+  const productionPoints = Number(totalWorkPoints) * productionFactor;
+  const gatheringPoints = Number(totalWorkPoints) * (1 - productionFactor);
   const focusedResourcesCount = Object.values(resourceFocus).filter(v => v).length;
   const pointsPerResource = focusedResourcesCount > 0 ? gatheringPoints / focusedResourcesCount : 0;
   const projectedYield = Math.round(pointsPerResource * GATHERING_YIELD_PER_POINT);
-  const totalStoredResources = Object.values(city.localResources).reduce((sum: number, val: unknown) => sum + (Number(val) || 0), 0);
-  // FIX: Explicitly cast city.level to a number to prevent type errors after state cloning.
-  const buildingSlots = Array.from({ length: Number(city.level) });
+  const totalStoredResources = Object.values(city.localResources ?? {}).reduce((sum: number, val: unknown) => sum + (Number(val) || 0), 0);
+  // FIX: Explicitly cast city.level to a number to prevent type errors from state cloning.
+  const buildingSlots = Array.from({ length: Number(city.level ?? 0) });
 
   return (
     <div 
@@ -437,8 +431,10 @@ const renderBuildingProduction = () => {
                         )
                     }
                     const isSlotQueued = (city.buildQueue as BuildQueueItem[]).some(item => item.type === 'building');
+                    // FIX: The type of city.buildings.length is not guaranteed to be a number after state cloning.
+                    // Safely get the length by checking if city.buildings is an array first, and cast city.level to a number for comparison.
                     const numBuildings = (Array.isArray(city.buildings) ? city.buildings.length : 0);
-                    const cityLevel = Number(city.level);
+                    const cityLevel = Number(city.level ?? 0);
                     if (isCurrentPlayerCity && !isSlotQueued && numBuildings < cityLevel && index === numBuildings) {
                          return <div key={index} className="bg-gray-900/50 p-2 rounded-lg flex items-center justify-center h-24 text-gray-500 italic">Empty Slot</div>
                     }

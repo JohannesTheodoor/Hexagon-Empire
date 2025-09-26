@@ -1,9 +1,10 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { GameState, Army, City, Unit, UnitType } from '../types';
 import { useGameStore } from '../store/gameStore';
 import { calculateArmyStrength, calculateDefenderStrength, ArmyStrength } from '../utils/combatLogic';
 import StackedUnitCard from './StackedUnitCard';
+import ManualBattle from './ManualBattle';
 
 interface BattleScreenProps {
   battleInfo: {
@@ -50,6 +51,7 @@ const ArmyPanel: React.FC<{ title: string; army: Army | City; strength: ArmyStre
 };
 
 const BattleScreen: React.FC<BattleScreenProps> = ({ battleInfo, onResolve, onClose }) => {
+    const [showManualBattle, setShowManualBattle] = useState(false);
     const gameState = useGameStore(state => state.gameState)!;
     
     const { attacker, defender, attackerStrength, defenderStrength, victoryChance, isPlayerDefending } = useMemo(() => {
@@ -70,6 +72,10 @@ const BattleScreen: React.FC<BattleScreenProps> = ({ battleInfo, onResolve, onCl
 
         return { attacker, defender, attackerStrength, defenderStrength, victoryChance: chance, isPlayerDefending: playerIsDefending };
     }, [gameState, battleInfo]);
+
+    if (showManualBattle) {
+        return <ManualBattle battleInfo={battleInfo} onBattleComplete={onResolve} />;
+    }
 
     const attackerColor = gameState.players.find(p => p.id === attacker.ownerId)!.color;
     const defenderColor = gameState.players.find(p => p.id === defender.ownerId)!.color;
@@ -102,7 +108,7 @@ const BattleScreen: React.FC<BattleScreenProps> = ({ battleInfo, onResolve, onCl
                 </div>
 
                 <div className="p-6 border-t-2 border-gray-600 flex-shrink-0 flex justify-center items-center gap-6">
-                    <button disabled className="px-8 py-3 bg-gray-600 text-lg font-semibold rounded-lg cursor-not-allowed opacity-50">Manual Battle</button>
+                    <button onClick={() => setShowManualBattle(true)} className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-lg font-semibold rounded-lg transition-colors">Manual Battle</button>
                     <button onClick={onResolve} className="px-8 py-3 bg-green-600 hover:bg-green-500 text-lg font-bold rounded-lg transition-colors">Auto-Resolve</button>
                     <button 
                         onClick={onClose} 

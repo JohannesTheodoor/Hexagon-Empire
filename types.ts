@@ -38,6 +38,7 @@ export enum UnitType {
     Child = 'Child',
     Shaman = 'Shaman',
     StoneWarrior = 'Stone Warrior',
+    Hunter = 'Hunter',
 }
 
 export enum UnitSize {
@@ -60,6 +61,7 @@ export interface UnitDefinition {
     attack: number;
     defense: number;
     maxHp: number;
+    maxMorale: number;
     size: UnitSize;
     foodGatherRate: number;
     foodConsumption: number;
@@ -70,6 +72,9 @@ export interface UnitDefinition {
     healingBonus?: number;
     requiredTech?: string;
     gender?: Gender;
+    hasRangedAttack?: boolean;
+    rangedAttack?: number;
+    rangedAttackRange?: number;
 }
 
 export enum BuildingType {
@@ -155,6 +160,7 @@ export interface Unit {
   type: UnitType;
   ownerId: number;
   hp: number;
+  morale?: number;
   foodStored: number;
   age?: number;
   gender: Gender;
